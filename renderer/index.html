@@ -1,0 +1,2124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file:; media-src 'self' blob: file:; connect-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-src 'none'">
+<title>ScreenForge</title>
+<link rel="stylesheet" href="tailwind.css">
+<style>
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; background:#080a0f; color:#eef4fb;
+    font-family:'Inter',-apple-system,sans-serif; height:100vh; overflow:hidden; }
+  body { -webkit-app-region:drag; }
+  .nd { -webkit-app-region:no-drag; }
+  .hidden { display:none !important; }
+
+  /* Primary CTA */
+  .btn-cta {
+    background: #2563eb;
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.15);
+    font-weight: 700;
+    letter-spacing: .01em;
+    transition: background .15s, box-shadow .15s;
+  }
+  .btn-cta:hover { background:#1d4ed8; }
+  .btn-cta:active { transform:scale(.99); background:#1e40af; }
+
+  /* Ghost button */
+  .btn-ghost {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.08);
+    transition: background .15s, border-color .15s;
+  }
+  .btn-ghost:hover { background:rgba(255,255,255,.07); border-color:rgba(255,255,255,.13); }
+
+  /* Sidebar panels */
+  .ss-panel {
+    background: #111217;
+    border-right: 1px solid rgba(255,255,255,.07);
+    flex-shrink: 0;
+  }
+  .ss-panel-right {
+    background: #111217;
+    border-left: 1px solid rgba(255,255,255,.07);
+    flex-shrink: 0;
+  }
+  /* keep .glass for editor panels */
+  .glass {
+    background: rgba(10,11,15,.92);
+    border: 1px solid rgba(255,255,255,.08);
+  }
+
+  /* Source cards */
+  .src-card {
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 1.5px solid transparent;
+    transition: all .15s ease;
+    background: rgba(255,255,255,.04);
+  }
+  .src-card:hover { background:rgba(255,255,255,.07); }
+  .src-card.selected { border-color:#3b82f6;
+    box-shadow: 0 0 0 1px rgba(59,130,246,.3);
+    background: rgba(59,130,246,.08); }
+
+  /* Pill toggle (Frame / Padding) */
+  .pill-toggle {
+    padding: 5px 14px; border-radius: 8px;
+    font-size: 12px; font-weight: 500;
+    cursor: pointer; transition: all .15s ease;
+    border: 1px solid rgba(255,255,255,.09);
+    color: rgba(255,255,255,.38); background: transparent;
+  }
+  .pill-toggle:hover { color:rgba(255,255,255,.7); background:rgba(255,255,255,.06); }
+  .pill-toggle.toggle-on { color:rgba(255,255,255,.9); background:rgba(255,255,255,.09); border-color:rgba(255,255,255,.18); }
+
+  /* Option row */
+  .option-row { transition:background .12s; border-radius:8px; }
+  .option-row:hover { background:rgba(255,255,255,.04); }
+
+  /* Zoom segmented control */
+  .zoom-level-btn { transition:all .12s; }
+  .zoom-level-btn.active { background:rgba(59,130,246,.2); color:#60a5fa; }
+
+  /* iOS-style toggle */
+  .toggle-track { transition:background .2s; background:rgba(255,255,255,.12); }
+  .toggle-thumb { transition:transform .18s cubic-bezier(.34,1.56,.64,1); }
+  .toggle-on .toggle-track { background:#2563eb; }
+  .toggle-on .toggle-thumb { transform:translateX(20px); }
+
+  /* Source tabs */
+  .tab-active {
+    background: rgba(255,255,255,.1);
+    color: rgba(255,255,255,.9);
+  }
+  .tab-btn { color: rgba(255,255,255,.35); }
+
+  /* ── Timeline ── */
+  #timelineArea { background:#0c0d12; user-select:none; }
+
+  /* Playhead needle spans ruler, clip, and zoom tracks */
+  .timeline-playhead { position:absolute; top:0; bottom:0; width:1.5px;
+    background:rgba(96,165,250,.9); pointer-events:none; z-index:15;
+    box-shadow:0 0 6px rgba(96,165,250,.5); }
+
+  /* Playhead circle handle (sits in ruler row) */
+  #playheadHandle {
+    position:absolute; top:50%; transform:translate(-50%,-50%);
+    width:14px; height:14px; border-radius:50%; pointer-events:none; z-index:20;
+    background:#60a5fa; box-shadow:0 0 0 2px rgba(96,165,250,.3), 0 0 10px rgba(96,165,250,.5);
+  }
+
+  /* Amber clip bar */
+  #clipFill {
+    position:absolute; top:5px; bottom:5px;
+    background:linear-gradient(180deg, #f0a500 0%, #c87400 100%);
+    border-radius:7px; z-index:2; pointer-events:none; overflow:hidden;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.2);
+  }
+
+  /* Trim handles use rounded edges and span the clip bar */
+  .trim-handle {
+    position:absolute; top:5px; bottom:5px; width:8px;
+    background:rgba(245,182,0,.95); cursor:ew-resize; z-index:12;
+    border-radius:5px; box-shadow:0 0 0 1.5px rgba(255,255,255,.35), 0 2px 8px rgba(0,0,0,.4);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .trim-handle::after { content:''; width:1.5px; height:12px;
+    background:rgba(255,255,255,.6); border-radius:1px; }
+  .trim-handle:hover { background:#fbbf24; }
+
+  /* Excluded (outside trim) overlay */
+  .trim-shade { position:absolute; top:0; bottom:0; pointer-events:none;
+    background:rgba(0,0,0,.65); z-index:4; }
+
+  /* Zoom track bar */
+  .zoom-bar { position:absolute; top:3px; bottom:3px; border-radius:5px;
+    background:linear-gradient(180deg,#3b82f6 0%,#1d4ed8 100%);
+    z-index:5; pointer-events:auto; cursor:pointer; min-width:40px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.2);
+    display:flex; align-items:center; justify-content:center; gap:4px; overflow:hidden; }
+
+  /* Cut marker */
+  .cut-marker { position:absolute; top:0; bottom:0; width:2px;
+    background:rgba(248,113,113,.85); pointer-events:none; z-index:10;
+    box-shadow:0 0 8px rgba(248,113,113,.4); }
+  .cut-marker::before { content:'✂'; position:absolute; top:-1px; left:50%;
+    transform:translateX(-50%); font-size:9px; color:rgba(248,113,113,.9); }
+
+  /* Keyframe dot */
+  .keyframe-dot { position:absolute; top:50%; transform:translate(-50%,-50%);
+    width:9px; height:9px; border-radius:50%; border:1.5px solid #0c0d12;
+    cursor:pointer; z-index:20; }
+  .keyframe-dot:hover { transform:translate(-50%,-50%) scale(1.5); }
+
+  /* Legacy / hidden */
+  .timeline-fill { display:none; }
+  .timeline-track { position:relative; overflow:hidden; cursor:pointer; }
+
+  /* Background preview canvas */
+  #bgPreviewCanvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+  /* Grain texture over canvas */
+  #bgPreviewWrap::after {
+    content: '';
+    position: absolute; inset: 0;
+    pointer-events: none; z-index: 2;
+    opacity: .055;
+    mix-blend-mode: screen;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 180px 180px;
+  }
+
+  /* BG swatch circles (recording screen bottom bar) */
+  .bg-swatch {
+    width:28px; height:28px; border-radius:50%; cursor:pointer;
+    border: 2px solid transparent;
+    box-shadow: 0 2px 8px rgba(0,0,0,.5);
+    transition: all .18s ease; flex-shrink:0;
+  }
+  .bg-swatch:hover { transform:scale(1.15); }
+  .bg-swatch.active { border-color:rgba(255,255,255,.8); box-shadow:0 0 0 2px rgba(255,255,255,.2); }
+
+  /* Floating capture toolbar */
+  .capture-nav {
+    position: absolute;
+    left: 50%;
+    bottom: 78px;
+    transform: translateX(-50%);
+    z-index: 12;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    min-height: 66px;
+    max-width: calc(100% - 40px);
+    border-radius: 18px;
+    background: rgba(56, 58, 63, .78);
+    border: 1px solid rgba(255,255,255,.16);
+    box-shadow: 0 18px 70px rgba(0,0,0,.46), inset 0 1px 0 rgba(255,255,255,.1);
+    backdrop-filter: blur(22px) saturate(1.2);
+    -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  }
+  .capture-nav-sep {
+    width: 1px;
+    height: 42px;
+    background: rgba(255,255,255,.12);
+    margin: 0 4px;
+    flex: 0 0 auto;
+  }
+  .capture-tool {
+    min-width: 78px;
+    height: 50px;
+    border: 0;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: rgba(255,255,255,.54);
+    background: transparent;
+    cursor: pointer;
+    transition: background .14s, color .14s;
+  }
+  .capture-tool:hover { background: rgba(255,255,255,.08); color: rgba(255,255,255,.86); }
+  .capture-tool.active {
+    background: rgba(255,255,255,.11);
+    color: rgba(255,255,255,.95);
+  }
+  .capture-tool svg { width: 23px; height: 23px; stroke-width: 1.9; }
+  .capture-tool span { font-size: 11px; font-weight: 700; line-height: 1; }
+  .capture-pill {
+    height: 50px;
+    min-width: 178px;
+    border: 0;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 16px;
+    color: rgba(255,255,255,.58);
+    background: transparent;
+    cursor: pointer;
+    transition: background .14s, color .14s;
+    font-size: 16px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .capture-pill:hover { background: rgba(255,255,255,.08); color: rgba(255,255,255,.86); }
+  .capture-pill.active { color: rgba(255,255,255,.95); }
+  .capture-pill svg { width: 24px; height: 24px; stroke-width: 1.9; flex: 0 0 auto; }
+  .capture-close, .capture-settings {
+    width: 48px;
+    height: 48px;
+    border: 0;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,.62);
+    background: transparent;
+    cursor: pointer;
+    transition: background .14s, color .14s;
+    flex: 0 0 auto;
+  }
+  .capture-close:hover, .capture-settings:hover { background: rgba(255,255,255,.08); color: rgba(255,255,255,.9); }
+  .capture-close svg, .capture-settings svg { width: 24px; height: 24px; stroke-width: 2; }
+  .area-chip {
+    position: absolute;
+    left: 50%;
+    bottom: 150px;
+    transform: translateX(-50%);
+    z-index: 13;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 11px;
+    border-radius: 999px;
+    background: rgba(15,23,42,.84);
+    border: 1px solid rgba(96,165,250,.34);
+    color: rgba(255,255,255,.82);
+    font-size: 12px;
+    font-weight: 700;
+    box-shadow: 0 12px 34px rgba(0,0,0,.32);
+  }
+
+  /* ── Inspector icon rail ── */
+  .insp-icon {
+    width:34px; height:34px; border-radius:8px;
+    display:flex; align-items:center; justify-content:center;
+    color:rgba(255,255,255,.28); cursor:pointer;
+    transition:all .12s; background:transparent; border:none; outline:none;
+    flex-shrink:0;
+  }
+  .insp-icon:hover { color:rgba(255,255,255,.65); background:rgba(255,255,255,.06); }
+  .insp-icon.active { color:#60a5fa; background:rgba(96,165,250,.12); }
+
+  /* Inspector panel tabs */
+  .insp-tab { transition:all .12s; color:rgba(255,255,255,.3); border:none; outline:none; cursor:pointer; background:transparent; }
+  .insp-tab.active { background:rgba(255,255,255,.09); color:rgba(255,255,255,.88); }
+
+  /* Inspector background gradient swatches */
+  .insp-bg-thumb {
+    aspect-ratio:1; border-radius:9px; cursor:pointer;
+    border:2px solid transparent; transition:all .15s;
+    box-shadow:0 2px 8px rgba(0,0,0,.4);
+  }
+  .insp-bg-thumb:hover { transform:scale(1.06); box-shadow:0 4px 16px rgba(0,0,0,.5); }
+  .insp-bg-thumb.active { border-color:#60a5fa; box-shadow:0 0 0 1px rgba(96,165,250,.4), 0 4px 12px rgba(0,0,0,.5); }
+
+  /* ── Mini-timeline in Clip panel ── */
+  .mini-timeline-track {
+    position: relative; height: 36px;
+    background: rgba(0,0,0,.5); border-radius: 8px; overflow: visible;
+    cursor: crosshair;
+  }
+  .mt-handle {
+    position: absolute; top: -2px; bottom: -2px; width: 10px;
+    transform: translateX(-50%); cursor: ew-resize; z-index: 15;
+    border-radius: 4px; background: rgba(245,182,0,.95);
+    box-shadow: 0 0 0 1.5px rgba(255,255,255,.3), 0 2px 8px rgba(0,0,0,.4);
+    display: flex; align-items: center; justify-content: center;
+    transition: background .1s;
+  }
+  .mt-handle:hover { background: #fbbf24; }
+
+  /* Creator Intelligence: industrial editorial controls */
+  :root {
+    --creator-ink: #08110f;
+    --creator-panel: rgba(10, 24, 22, .92);
+    --creator-line: rgba(94, 234, 212, .24);
+    --creator-line-strong: rgba(94, 234, 212, .52);
+    --creator-mint: #5eead4;
+    --creator-copy: rgba(226, 255, 250, .78);
+    --creator-muted: rgba(226, 255, 250, .42);
+    --creator-cut: rgba(248, 113, 113, .42);
+    --creator-cut-soft: rgba(248, 113, 113, .12);
+    --creator-focus: #99f6e4;
+  }
+  .creator-director-card {
+    position: relative;
+    overflow: hidden;
+    padding: 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--creator-line);
+    border-radius: 12px;
+    background:
+      linear-gradient(135deg, var(--creator-panel), var(--creator-ink));
+    box-shadow: inset 3px 0 0 var(--creator-mint);
+  }
+  .creator-director-card::after {
+    content: '';
+    position: absolute;
+    right: -18px;
+    top: -18px;
+    width: 72px;
+    height: 72px;
+    border: 1px solid var(--creator-line);
+    border-radius: 50%;
+    opacity: .55;
+    pointer-events: none;
+  }
+  .creator-kicker {
+    color: var(--creator-mint);
+    font-family: 'Avenir Next Condensed', sans-serif;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+  }
+  .creator-copy { color: var(--creator-muted); }
+  .creator-control {
+    color: var(--creator-copy);
+    background: var(--creator-panel);
+    border: 1px solid var(--creator-line);
+  }
+  .creator-control:focus-visible {
+    outline: 2px solid var(--creator-focus);
+    outline-offset: 2px;
+  }
+  .creator-run {
+    color: var(--creator-ink);
+    background: var(--creator-mint);
+    border: 1px solid var(--creator-line-strong);
+  }
+  .creator-run:hover { background: var(--creator-focus); }
+  .removed-range {
+    position: absolute;
+    top: 5px;
+    bottom: 5px;
+    z-index: 9;
+    pointer-events: none;
+    border-left: 1px solid var(--creator-cut);
+    border-right: 1px solid var(--creator-cut);
+    background: repeating-linear-gradient(
+      135deg,
+      var(--creator-cut-soft) 0,
+      var(--creator-cut-soft) 5px,
+      var(--creator-cut) 5px,
+      var(--creator-cut) 6px
+    );
+  }
+
+  /* Improved clickable cut markers */
+  .cut-marker {
+    position: absolute; top: 0; bottom: 0; width: 6px;
+    background: rgba(248,113,113,.85); pointer-events: auto; z-index: 10;
+    transform: translateX(-50%); cursor: pointer;
+    box-shadow: 0 0 8px rgba(248,113,113,.4);
+    transition: width .1s, background .1s;
+  }
+  .cut-marker::before {
+    content: '✂'; position: absolute; top: -1px; left: 50%;
+    transform: translateX(-50%); font-size: 9px; color: rgba(248,113,113,.9);
+  }
+  .cut-marker:hover { width: 10px; background: rgba(248,113,113,1); }
+
+  /* Shortcut badge */
+  .kbd {
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; font-family: monospace; font-weight: 700;
+    padding: 1px 4px; border-radius: 3px;
+    background: rgba(255,255,255,.08); color: rgba(255,255,255,.3);
+    border: 1px solid rgba(255,255,255,.1); letter-spacing: 0;
+  }
+
+  /* Record button glow animation */
+  @keyframes rec-glow {
+    0%,100% { box-shadow: 0 0 0 1px rgba(96,165,250,.4), 0 8px 40px rgba(37,99,235,.35), inset 0 1px 0 rgba(255,255,255,.45); }
+    50%     { box-shadow: 0 0 0 1px rgba(96,165,250,.65), 0 8px 60px rgba(37,99,235,.6),  inset 0 1px 0 rgba(255,255,255,.45); }
+  }
+  @keyframes rec-ring {
+    0%   { transform:scale(1);   opacity:.5; }
+    100% { transform:scale(1.6); opacity:0; }
+  }
+  #recordBtn { animation: rec-glow 3s ease-in-out infinite; }
+  #recordBtn:hover { filter:brightness(1.1); animation:none;
+    box-shadow:0 0 0 1px rgba(96,165,250,.8),0 12px 60px rgba(37,99,235,.65),inset 0 1px 0 rgba(255,255,255,.5); }
+
+  /* Recording pulse */
+  @keyframes rec-pulse { 0%,100%{opacity:1} 50%{opacity:.15} }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .rec-dot { animation:rec-pulse 1.3s infinite; }
+
+  /* Countdown */
+  .countdown-ring {
+    background: conic-gradient(from -90deg, rgba(96,165,250,.9) var(--countdown-pct,0%), rgba(148,163,184,.1) 0);
+  }
+  .countdown-ring:before {
+    content:""; position:absolute; inset:5px; border-radius:999px; background:#0c1017;
+  }
+
+  /* Video preview */
+  #videoPreview { max-width:100%; max-height:100%; object-fit:contain; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width:3px; height:3px; }
+  ::-webkit-scrollbar-thumb { background:rgba(255,255,255,.1); border-radius:2px; }
+
+  #recCanvas { position:fixed; left:-9999px; top:-9999px; }
+</style>
+<link rel="stylesheet" href="apple.css">
+</head>
+<body class="sf-app">
+
+<canvas id="recCanvas"></canvas>
+
+<!-- Countdown overlay -->
+<div id="countdownOverlay" class="hidden fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm items-center justify-center pointer-events-none"
+     role="status" aria-live="assertive" aria-atomic="true">
+  <div class="card rounded-3xl px-10 py-8 text-center">
+    <div id="countdownRing" class="countdown-ring relative mx-auto mb-5 h-28 w-28 rounded-full flex items-center justify-center">
+      <span id="countdownValue" class="relative z-10 text-5xl font-black tracking-tight">3</span>
+    </div>
+    <p class="text-xs font-semibold tracking-[.18em] uppercase text-accent">Recording starts soon</p>
+    <p id="countdownHint" class="mt-1.5 text-sm text-dim">Get your cursor and window ready.</p>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     RECORDER
+═══════════════════════════════════════════════════ -->
+<div id="screenRecorder" class="flex flex-col h-screen" style="background:#0a0b0e">
+
+  <!-- Titlebar -->
+  <div class="sf-titlebar h-11 flex-shrink-0 flex items-center justify-between px-5 nd"
+       style="background:#0a0b0e;border-bottom:1px solid rgba(255,255,255,.07);-webkit-app-region:drag">
+    <div class="ml-14 flex items-center gap-2 select-none nd">
+      <span class="text-[13px] font-bold tracking-tight" style="color:rgba(255,255,255,.9)">ScreenForge</span>
+      <span class="text-[9px] font-semibold uppercase tracking-[.14em] px-1.5 py-0.5 rounded" style="background:rgba(96,165,250,.15);color:#60a5fa">Studio</span>
+    </div>
+    <div class="flex items-center nd" style="-webkit-app-region:no-drag">
+      <button onclick="importVideo()"   class="nd px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors" style="color:rgba(255,255,255,.38)" onmouseover="this.style.color='rgba(255,255,255,.75)'" onmouseout="this.style.color='rgba(255,255,255,.38)'">Import</button>
+      <button onclick="openProject()"   class="nd px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors" style="color:rgba(255,255,255,.38)" onmouseover="this.style.color='rgba(255,255,255,.75)'" onmouseout="this.style.color='rgba(255,255,255,.38)'">Open project</button>
+      <button onclick="reloadSources()" class="nd px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors" style="color:rgba(255,255,255,.38)" onmouseover="this.style.color='rgba(255,255,255,.75)'" onmouseout="this.style.color='rgba(255,255,255,.38)'">Refresh</button>
+    </div>
+  </div>
+
+  <!-- Three-column body -->
+  <div class="sf-recorder-body flex flex-1 min-h-0 overflow-hidden">
+
+    <!-- LEFT: source picker -->
+    <aside class="sf-source-sidebar ss-panel w-52 flex flex-col overflow-hidden nd" aria-label="Capture source">
+
+      <!-- Tabs -->
+      <div class="px-3 pt-3 pb-2 flex-shrink-0">
+        <p class="sf-sidebar-eyebrow">Capture source</p>
+        <div class="flex gap-0.5 p-0.5 rounded-[10px]" style="background:rgba(0,0,0,.35)">
+          <button onclick="filterSources('screen')" id="tab-screen"
+            class="tab-btn flex-1 py-1.5 rounded-[8px] text-[12px] font-medium transition-all tab-active nd">Display</button>
+          <button onclick="filterSources('window')" id="tab-window"
+            class="tab-btn flex-1 py-1.5 rounded-[8px] text-[12px] font-medium transition-all nd">Window</button>
+        </div>
+      </div>
+
+      <!-- Source list -->
+      <div id="sourceGrid" class="flex-1 overflow-y-auto px-2 pb-2 space-y-1.5 nd">
+        <div class="text-center py-10 text-[11px]" style="color:rgba(255,255,255,.2)">Loading…</div>
+      </div>
+
+    </aside>
+
+    <!-- CENTER: preview canvas -->
+    <main class="sf-recorder-stage flex-1 relative overflow-hidden" style="background:#000">
+      <div id="bgPreviewWrap" class="absolute inset-0">
+        <canvas id="bgPreviewCanvas"></canvas>
+        <div id="bgPreviewHint" class="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="color:rgba(255,255,255,.1)"><rect x="2" y="3" width="20" height="14" rx="2.5"/><path d="M8 21h8M12 17v4"/></svg>
+          <p class="text-[12px]" style="color:rgba(255,255,255,.2)">Select a source to preview</p>
+        </div>
+      </div>
+      <div id="areaChip" class="area-chip nd">
+        <span id="areaChipText">Area selected</span>
+        <button onclick="clearCaptureArea()" class="nd" style="border:0;background:transparent;color:rgba(255,255,255,.58);font-size:15px;line-height:1;cursor:pointer">x</button>
+      </div>
+      <div class="capture-nav nd">
+        <button class="capture-close nd" onclick="backToRecorder()" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+        <div class="capture-nav-sep"></div>
+        <button id="nav-display" class="capture-tool active nd" onclick="setCaptureMode('screen')" title="Record a display">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          <span>Display</span>
+        </button>
+        <button id="nav-window" class="capture-tool nd" onclick="setCaptureMode('window')" title="Record a window">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 9h16"/></svg>
+          <span>Window</span>
+        </button>
+        <button id="nav-area" class="capture-tool nd" onclick="beginAreaSelection()" title="Draw a custom recording area">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>
+          <span>Area</span>
+        </button>
+        <div class="capture-nav-sep"></div>
+        <button id="nav-camera" class="capture-pill nd" onclick="toggleSetting('webcam'); syncCaptureNav()" title="Toggle webcam bubble">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m16 10 5-3v10l-5-3"/><rect x="3" y="6" width="13" height="12" rx="2"/></svg>
+          <span id="navCameraText">No camera</span>
+        </button>
+        <button id="nav-mic" class="capture-pill nd" onclick="toggleSetting('mic'); syncCaptureNav()" title="Toggle microphone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg>
+          <span id="navMicText">Microphone</span>
+        </button>
+        <button id="nav-systemAudio" class="capture-pill nd" onclick="toggleSetting('systemAudio'); syncCaptureNav()" title="Toggle system audio">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M9 11h2l2-2v6l-2-2H9z"/></svg>
+          <span id="navSystemText">No system audio</span>
+        </button>
+        <div class="capture-nav-sep"></div>
+        <button id="nav-audioCleanup" class="capture-settings nd" onclick="toggleSetting('audioCleanup'); syncCaptureNav()"
+          title="Toggle audio cleanup" aria-label="Audio cleanup" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6l-.1.1a2 2 0 1 1-3.8 0L10 20a1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1l-.1-.1a2 2 0 1 1 0-3.8L4 10a1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6l.1-.1a2 2 0 1 1 3.8 0l.1.1a1.7 1.7 0 0 0 1 .6 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.2.35.4.67.6 1l.1.1a2 2 0 1 1 0 3.8l-.1.1a1.7 1.7 0 0 0-.6 1Z"/></svg>
+        </button>
+      </div>
+    </main>
+
+    <!-- RIGHT: recording options -->
+    <aside class="sf-recording-sidebar ss-panel-right w-[248px] flex flex-col overflow-hidden nd" aria-label="Recording setup">
+
+      <!-- Section: Enhancements -->
+      <div class="px-4 pt-4 pb-1 flex-shrink-0">
+        <p class="text-[10px] font-semibold tracking-[.1em] uppercase" style="color:rgba(255,255,255,.22)">Recording setup</p>
+      </div>
+
+      <div class="flex-1 overflow-y-auto px-3 pb-3 space-y-0.5 nd">
+
+        <!-- Click zoom -->
+        <div class="option-row flex items-center justify-between px-2 py-2.5 nd" onclick="toggleSetting('zoom')">
+          <div>
+            <p class="text-[13px] font-medium" style="color:rgba(255,255,255,.85)">Click zoom</p>
+            <p class="text-[11px] mt-0.5" style="color:rgba(255,255,255,.3)">Auto-zoom on click</p>
+          </div>
+          <div class="toggle-on cursor-pointer shrink-0" id="toggle-zoom">
+            <div class="toggle-track w-9 h-5 rounded-full relative">
+              <div class="toggle-thumb absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Zoom level -->
+        <div class="flex items-center justify-between px-2 py-2">
+          <p class="text-[12px]" style="color:rgba(255,255,255,.38)">Zoom level</p>
+          <div class="flex rounded-[8px] overflow-hidden" style="background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.08)">
+            <button onclick="setZoomLevel(1.5)" id="zl-1.5" class="zoom-level-btn px-2.5 py-1 text-[11px] font-medium nd" style="color:rgba(255,255,255,.32)">1.5×</button>
+            <div style="width:1px;background:rgba(255,255,255,.07)"></div>
+            <button onclick="setZoomLevel(2)"   id="zl-2"   class="zoom-level-btn active px-2.5 py-1 text-[11px] font-medium nd">2×</button>
+            <div style="width:1px;background:rgba(255,255,255,.07)"></div>
+            <button onclick="setZoomLevel(2.5)" id="zl-2.5" class="zoom-level-btn px-2.5 py-1 text-[11px] font-medium nd" style="color:rgba(255,255,255,.32)">2.5×</button>
+          </div>
+        </div>
+
+        <div style="height:1px;background:rgba(255,255,255,.05);margin:4px 8px"></div>
+
+        <!-- Cursor spotlight -->
+        <div class="option-row flex items-center justify-between px-2 py-2.5 nd" onclick="toggleSetting('cursor')">
+          <div>
+            <p class="text-[13px] font-medium" style="color:rgba(255,255,255,.85)">Cursor spotlight</p>
+            <p class="text-[11px] mt-0.5" style="color:rgba(255,255,255,.3)">Highlight cursor position</p>
+          </div>
+          <div class="toggle-on cursor-pointer shrink-0" id="toggle-cursor">
+            <div class="toggle-track w-9 h-5 rounded-full relative">
+              <div class="toggle-thumb absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shortcut overlays -->
+        <div class="option-row flex items-center justify-between px-2 py-2.5 nd" onclick="toggleSetting('shortcuts')">
+          <div>
+            <p class="text-[13px] font-medium" style="color:rgba(255,255,255,.85)">Shortcut overlays</p>
+            <p class="text-[11px] mt-0.5" style="color:rgba(255,255,255,.3)">Show key presses as cards</p>
+          </div>
+          <div class="toggle-on cursor-pointer shrink-0" id="toggle-shortcuts">
+            <div class="toggle-track w-9 h-5 rounded-full relative">
+              <div class="toggle-thumb absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Click pulses -->
+        <div class="option-row flex items-center justify-between px-2 py-2.5 nd" onclick="toggleSetting('clickRings')">
+          <div>
+            <p class="text-[13px] font-medium" style="color:rgba(255,255,255,.85)">Click pulses</p>
+            <p class="text-[11px] mt-0.5" style="color:rgba(255,255,255,.3)">Render click rings on export</p>
+          </div>
+          <div class="toggle-on cursor-pointer shrink-0" id="toggle-clickRings">
+            <div class="toggle-track w-9 h-5 rounded-full relative">
+              <div class="toggle-thumb absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="height:1px;background:rgba(255,255,255,.05);margin:4px 8px"></div>
+
+        <!-- Microphone -->
+        <div class="option-row flex items-center justify-between px-2 py-2.5 nd" onclick="toggleSetting('mic')">
+          <div>
+            <p class="text-[13px] font-medium" style="color:rgba(255,255,255,.85)">Microphone</p>
+            <p class="text-[11px] mt-0.5" style="color:rgba(255,255,255,.3)">Record voiceover</p>
+          </div>
+          <div class="cursor-pointer shrink-0" id="toggle-mic">
+            <div class="toggle-track w-9 h-5 rounded-full relative">
+              <div class="toggle-thumb absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Webcam -->
+        <div class="option-row flex items-center justify-between px-2 py-2.5 nd" onclick="toggleSetting('webcam')">
+          <div>
+            <p class="text-[13px] font-medium" style="color:rgba(255,255,255,.85)">Camera</p>
+            <p class="text-[11px] mt-0.5" style="color:rgba(255,255,255,.3)">Add picture in picture</p>
+          </div>
+          <div id="toggle-webcam" class="cursor-pointer shrink-0">
+            <div class="toggle-track w-9 h-5 rounded-full relative">
+              <div class="toggle-thumb absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Webcam position -->
+        <div class="flex items-center justify-between px-2 py-1.5">
+          <p class="text-[12px]" style="color:rgba(255,255,255,.3)">Position</p>
+          <select id="webcamPos" aria-label="Webcam position" onchange="S.cfg.webcamPos=this.value"
+            class="rounded-[7px] px-2 py-1 text-[11px] outline-none cursor-pointer nd"
+            style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);color:rgba(255,255,255,.6)">
+            <option value="br" selected>Bottom right</option>
+            <option value="bl">Bottom left</option>
+            <option value="tr">Top right</option>
+            <option value="tl">Top left</option>
+          </select>
+        </div>
+
+        <!-- Webcam shape -->
+        <div class="flex items-center justify-between px-2 py-1.5">
+          <p class="text-[12px]" style="color:rgba(255,255,255,.3)">Shape</p>
+          <select id="webcamShape" aria-label="Webcam shape" onchange="setWebcamShape(this.value)"
+            class="rounded-[7px] px-2 py-1 text-[11px] outline-none cursor-pointer nd"
+            style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);color:rgba(255,255,255,.6)">
+            <option value="rounded" selected>Rounded</option>
+            <option value="circle">Circle</option>
+            <option value="rect">Rectangle</option>
+          </select>
+        </div>
+
+        <!-- Camera device -->
+        <div class="flex items-center justify-between px-2 py-1.5">
+          <p class="text-[12px]" style="color:rgba(255,255,255,.3)">Camera</p>
+          <select id="camDeviceSelect" aria-label="Camera device" onchange="setCamDevice(this.value)"
+            class="rounded-[7px] px-2 py-1 text-[11px] outline-none cursor-pointer nd"
+            style="max-width:130px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);color:rgba(255,255,255,.6)">
+            <option value="">Default</option>
+          </select>
+        </div>
+
+        <div style="height:1px;background:rgba(255,255,255,.05);margin:4px 8px"></div>
+
+        <!-- Mic device -->
+        <div class="flex items-center justify-between px-2 py-1.5">
+          <p class="text-[12px]" style="color:rgba(255,255,255,.3)">Microphone</p>
+          <select id="micDeviceSelect" aria-label="Microphone device" onchange="setMicDevice(this.value)"
+            class="rounded-[7px] px-2 py-1 text-[11px] outline-none cursor-pointer nd"
+            style="max-width:130px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);color:rgba(255,255,255,.6)">
+            <option value="">Default</option>
+          </select>
+        </div>
+
+        <div style="height:1px;background:rgba(255,255,255,.05);margin:4px 8px"></div>
+
+        <!-- Frame rate -->
+        <div class="flex items-center justify-between px-2 py-2">
+          <p class="text-[13px] font-medium" style="color:rgba(255,255,255,.85)">Frame rate</p>
+          <select id="fpsSelect" aria-label="Recording frame rate" onchange="setFps(this.value)"
+            class="rounded-[7px] px-2 py-1 text-[11px] outline-none cursor-pointer nd"
+            style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);color:rgba(255,255,255,.6)">
+            <option value="15">15 fps</option>
+            <option value="24">24 fps</option>
+            <option value="30" selected>30 fps</option>
+          </select>
+        </div>
+
+        <!-- Recording quality -->
+        <div class="flex items-center justify-between px-2 py-2">
+          <p class="text-[13px] font-medium" style="color:rgba(255,255,255,.85)">Quality</p>
+          <select id="qualitySelect" aria-label="Recording quality" onchange="setQuality(this.value)"
+            class="rounded-[7px] px-2 py-1 text-[11px] outline-none cursor-pointer nd"
+            style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);color:rgba(255,255,255,.6)">
+            <option value="draft">Draft (4 Mbps)</option>
+            <option value="good">Good (8 Mbps)</option>
+            <option value="high" selected>High (12 Mbps)</option>
+            <option value="ultra">Ultra (20 Mbps)</option>
+            <option value="lossless">Lossless (40 Mbps)</option>
+          </select>
+        </div>
+
+        <!-- Countdown -->
+        <div class="flex items-center justify-between px-2 py-2">
+          <p class="text-[13px] font-medium" style="color:rgba(255,255,255,.85)">Countdown</p>
+          <select id="countdownSelect" aria-label="Recording countdown" onchange="setCountdown(this.value)"
+            class="rounded-[7px] px-2 py-1 text-[11px] outline-none cursor-pointer nd"
+            style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);color:rgba(255,255,255,.6)">
+            <option value="0">None</option>
+            <option value="3" selected>3 sec</option>
+            <option value="5">5 sec</option>
+            <option value="10">10 sec</option>
+          </select>
+        </div>
+
+        <!-- Auto-save to library -->
+        <div class="flex items-center justify-between px-2 py-2">
+          <div>
+            <p class="text-[13px] font-medium" style="color:rgba(255,255,255,.85)">Auto-save to library</p>
+            <p class="text-[11px] mt-0.5" style="color:rgba(255,255,255,.3)">Save clips to ~/Movies/ScreenForge</p>
+          </div>
+          <button id="toggle-autoSaveToLibrary" onclick="toggleSetting('autoSaveToLibrary')"
+            class="pill-toggle toggle-on nd">On</button>
+        </div>
+
+        <!-- Remote control URL -->
+        <div class="px-2 py-2" style="border-top:1px solid rgba(255,255,255,.06);margin-top:4px">
+          <p class="text-[12px] font-medium mb-1.5" style="color:rgba(255,255,255,.45)">Remote control</p>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="remoteUrlText" aria-label="Remote control URL" readonly value="Starting…" style="
+              flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);
+              border-radius:6px;padding:4px 8px;font-size:10px;color:rgba(255,255,255,.4);
+              font-family:monospace;outline:none;cursor:text">
+            <button onclick="copyRemoteUrl()" style="
+              padding:4px 10px;border-radius:6px;border:none;font-size:10px;font-weight:600;
+              background:rgba(99,102,241,.18);color:#a5b4fc;cursor:pointer;white-space:nowrap">Copy</button>
+          </div>
+          <p style="font-size:9px;color:rgba(255,255,255,.2);margin-top:4px">Open on any device on your Wi-Fi</p>
+        </div>
+
+        <!-- Recording templates -->
+        <div class="px-2 py-2" style="border-top:1px solid rgba(255,255,255,.06);margin-top:4px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <p class="text-[12px] font-medium" style="color:rgba(255,255,255,.45)">Presets</p>
+            <button onclick="saveRecordingTemplate()" style="
+              padding:3px 8px;border-radius:5px;border:none;font-size:10px;font-weight:600;
+              background:rgba(255,255,255,.07);color:rgba(255,255,255,.5);cursor:pointer">+ Save</button>
+          </div>
+          <div id="templateList" style="font-size:11px;color:rgba(255,255,255,.3)">No templates saved</div>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- Library panel (slide-in) -->
+    <div id="libraryPanel" class="hidden" role="dialog" aria-modal="true"
+      aria-labelledby="libraryDialogTitle" aria-describedby="libraryDialogDescription"
+      aria-hidden="true" tabindex="-1" style="
+      position:absolute;inset:0;background:#080b14;z-index:20;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:16px 20px 12px 80px;border-bottom:1px solid rgba(255,255,255,.07);
+        display:flex;align-items:center;gap:10px;flex-shrink:0">
+        <button type="button" id="libraryCloseBtn" onclick="hideLibraryPanel()" aria-label="Close clip library" style="
+          width:28px;height:28px;border-radius:50%;border:none;background:rgba(255,255,255,.07);
+          color:rgba(255,255,255,.5);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">←</button>
+        <h2 id="libraryDialogTitle" style="font-size:14px;font-weight:700;color:#dce8f8">Clip Library</h2>
+        <p id="libraryDialogDescription" class="sr-only">Choose a saved clip to edit, reveal it in Finder, or delete it.</p>
+        <div style="flex:1"></div>
+        <button type="button" onclick="changeLibraryDir()" aria-label="Choose clip library folder" style="font-size:10px;color:rgba(255,255,255,.3);background:none;border:none;cursor:pointer">⌂ Folder</button>
+        <button type="button" onclick="sf.openLibraryDir()" aria-label="Open clip library folder in Finder" style="font-size:10px;color:rgba(255,255,255,.3);background:none;border:none;cursor:pointer">Open ↗</button>
+      </div>
+      <div id="libraryGrid" aria-live="polite" aria-busy="false" style="
+        flex:1;overflow-y:auto;padding:16px;
+        display:grid;grid-template-columns:repeat(2, 1fr);gap:12px;
+        align-content:start"></div>
+    </div>
+
+  </div>
+
+  <!-- Crash recovery banner (hidden until sessions found) -->
+  <div id="recoveryPanel" class="hidden nd px-4 py-3"
+       style="background:rgba(251,191,36,.06);border-top:1px solid rgba(251,191,36,.2)">
+    <div class="flex items-center gap-2 mb-2">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <p class="text-[12px] font-semibold" style="color:#fbbf24">Unsaved recordings found</p>
+    </div>
+    <div id="recoveryList" class="space-y-1.5"></div>
+  </div>
+
+  <!-- Bottom bar: background swatches + frame/pad + record -->
+  <div class="sf-record-dock flex-shrink-0 nd" style="background:#0e0f13;border-top:1px solid rgba(255,255,255,.07)">
+
+    <!-- Swatches + pill toggles row -->
+    <div class="flex items-center gap-3 px-5 py-3">
+      <div id="bgSwatchRow" class="flex items-center gap-2"></div>
+      <div style="width:1px;height:18px;background:rgba(255,255,255,.08)"></div>
+      <button id="toggle-frame" onclick="toggleSetting('frame')" class="pill-toggle toggle-on nd">Frame</button>
+      <button id="toggle-pad"   onclick="toggleSetting('pad')"   class="pill-toggle toggle-on nd">Padding</button>
+      <div style="flex:1"></div>
+      <button onclick="showLibraryPanel()" style="
+        display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;border:none;
+        font-size:11px;font-weight:600;background:rgba(255,255,255,.06);
+        color:rgba(255,255,255,.45);cursor:pointer;transition:background .15s"
+        onmouseover="this.style.background='rgba(255,255,255,.1)'"
+        onmouseout="this.style.background='rgba(255,255,255,.06)'"
+        title="Clip Library">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        Library
+      </button>
+    </div>
+
+    <!-- Live stats bar (shown during recording) -->
+    <div id="recStatsBar" style="display:none;margin:0 20px 6px;padding:6px 12px;
+      background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);
+      border-radius:8px;font-size:10px;font-weight:600;color:#fca5a5;
+      font-family:monospace;letter-spacing:.03em"></div>
+
+    <!-- Record button -->
+    <div class="record-actions px-5 pb-5">
+
+      <!-- "Record Me" webcam quick-toggle -->
+      <button id="recordMeBtn" onclick="toggleRecordMe()"
+        class="w-full mb-3 nd"
+        style="
+          display:flex;align-items:center;justify-content:center;gap:10px;
+          padding:11px 16px;border-radius:14px;border:none;cursor:pointer;
+          background:rgba(255,255,255,.05);
+          border:1.5px solid rgba(255,255,255,.1);
+          transition:all .2s;
+        "
+        onmouseover="if(!this.classList.contains('rmt-on'))this.style.borderColor='rgba(255,255,255,.2)'"
+        onmouseout="if(!this.classList.contains('rmt-on'))this.style.borderColor='rgba(255,255,255,.1)'">
+        <!-- Camera icon -->
+        <div id="recordMeIcon" style="
+          width:32px;height:32px;border-radius:50%;flex-shrink:0;
+          background:rgba(255,255,255,.07);
+          display:flex;align-items:center;justify-content:center;
+          transition:all .2s;
+        ">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="recordMeIconSvg">
+            <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+          </svg>
+        </div>
+        <video id="recordMePreview" muted autoplay playsinline style="
+          display:none;width:44px;height:32px;border-radius:8px;object-fit:cover;
+          background:#05070a;border:1px solid rgba(255,255,255,.12);flex-shrink:0"></video>
+        <div style="text-align:left;flex:1">
+          <div id="recordMeLabel" style="font-size:13px;font-weight:800;color:rgba(255,255,255,.62);line-height:1.2">Include camera</div>
+          <div id="recordMeSub" style="font-size:10px;color:rgba(255,255,255,.32);margin-top:1px">Place camera above your recording</div>
+        </div>
+        <div id="recordMeStatus" style="
+          font-size:10px;font-weight:700;letter-spacing:.06em;
+          padding:3px 9px;border-radius:999px;
+          background:rgba(255,255,255,.06);color:rgba(255,255,255,.25);
+          transition:all .2s;
+        ">OFF</div>
+      </button>
+
+      <button id="recordBtn" onclick="startRecording()"
+        class="w-full py-3.5 rounded-xl text-[14px] font-semibold nd btn-cta">
+        Start Recording
+      </button>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding:0 2px">
+        <p class="text-[10px] nd" style="color:rgba(255,255,255,.18)">
+          <kbd class="font-mono">⌘⇧S</kbd> stop · <kbd class="font-mono">⌘⇧P</kbd> pause · <kbd class="font-mono">⌘⇧G</kbd> screenshot
+        </p>
+        <button onclick="showShortcutsHelp()" style="font-size:10px;color:rgba(255,255,255,.22);background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:4px" title="All shortcuts">⌨</button>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     EDITOR
+═══════════════════════════════════════════════════ -->
+<div id="screenEditor" class="hidden flex-col h-screen relative z-10" style="background:#06070d">
+
+  <!-- Titlebar -->
+  <div class="sf-titlebar sf-editor-titlebar h-11 flex items-center justify-between px-5 flex-shrink-0 nd"
+       style="background:rgba(6,7,13,.95);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,.055)">
+    <div class="flex items-center gap-2.5 ml-16">
+      <span class="text-sm font-bold text-text select-none tracking-tight">ScreenForge</span>
+      <span class="text-[10px] font-bold tracking-[.12em] uppercase bg-gradient-to-r from-blue-400 to-blue-300 bg-clip-text text-transparent">Editor</span>
+    </div>
+    <div class="flex items-center gap-1 nd">
+      <button onclick="backToRecorder()" class="btn-ghost text-[12px] text-dim hover:text-text px-3 py-1.5 rounded-lg transition-all nd">← Recorder</button>
+      <button onclick="saveProject()"    class="btn-ghost text-[12px] text-dim hover:text-text px-3 py-1.5 rounded-lg transition-all nd">Save</button>
+      <button onclick="openProject()"    class="btn-ghost text-[12px] text-dim hover:text-text px-3 py-1.5 rounded-lg transition-all nd">Open</button>
+      <div class="h-4 w-px mx-1" style="background:rgba(255,255,255,.08)"></div>
+      <button onclick="showExportPanel()" class="btn-cta text-[12px] px-5 py-1.5 rounded-lg nd">Export</button>
+    </div>
+  </div>
+
+  <!-- Body: preview + inspector -->
+  <div class="flex flex-1 overflow-hidden min-h-0">
+
+    <!-- Center column: toolbar + preview + timeline -->
+    <div class="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
+
+      <!-- Toolbar row -->
+      <div class="editor-toolbar flex items-center gap-1.5 px-4 py-2 flex-shrink-0 nd"
+           style="background:rgba(0,0,0,.4);border-bottom:1px solid rgba(255,255,255,.05)">
+        <!-- Playback -->
+        <button onclick="seekRelative(-5)" title="Back 5s"
+          class="nd w-7 h-7 rounded-lg flex items-center justify-center text-[13px] transition-all"
+          style="color:rgba(255,255,255,.4)" onmouseover="this.style.color='rgba(255,255,255,.8)'" onmouseout="this.style.color='rgba(255,255,255,.4)'">⏮</button>
+        <button onclick="togglePlay()" id="playBtn"
+          class="nd w-8 h-8 rounded-full flex items-center justify-center text-[14px] font-bold transition-all"
+          style="background:rgba(96,165,250,.15);color:#93c5fd;border:1px solid rgba(96,165,250,.28)">▶</button>
+        <button onclick="seekRelative(5)" title="Forward 5s"
+          class="nd w-7 h-7 rounded-lg flex items-center justify-center text-[13px] transition-all"
+          style="color:rgba(255,255,255,.4)" onmouseover="this.style.color='rgba(255,255,255,.8)'" onmouseout="this.style.color='rgba(255,255,255,.4)'">⏭</button>
+
+        <div class="h-5 w-px mx-0.5" style="background:rgba(255,255,255,.07)"></div>
+
+        <span class="text-[12px] font-mono select-none nd" style="min-width:88px;color:rgba(255,255,255,.65)">
+          <span id="currentTime">0:00</span><span style="color:rgba(255,255,255,.2)"> / </span><span id="totalTime" style="color:rgba(255,255,255,.3)">0:00</span>
+        </span>
+
+        <div class="h-5 w-px mx-0.5" style="background:rgba(255,255,255,.07)"></div>
+
+        <!-- Tools -->
+        <button id="btn-razor" onclick="toggleRazorMode()" title="Split clip at playhead" aria-pressed="false"
+          class="nd flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+          style="color:rgba(255,255,255,.4);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/></svg>
+          Split
+        </button>
+
+        <button onclick="addZoomKeyframe()" title="Add zoom keyframe at playhead"
+          class="nd flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+          style="color:rgba(251,191,36,.7);background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.16)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35M11 8v6M8 11h6"/></svg>
+          Zoom
+        </button>
+
+        <button onclick="addTextKeyframe()" title="Add text overlay"
+          class="nd flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+          style="color:rgba(74,222,128,.7);background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.16)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+          Text
+        </button>
+
+        <button onclick="addBlurZone();switchInspPanel('blur')" title="Add privacy blur zone"
+          class="nd flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+          style="color:rgba(139,92,246,.7);background:rgba(139,92,246,.06);border:1px solid rgba(139,92,246,.16)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18" stroke-opacity=".5"/></svg>
+          Blur
+        </button>
+
+        <button onclick="exportGifPreview()" id="gifPreviewBtn" title="Export 3-second GIF from playhead"
+          class="nd flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+          style="color:rgba(251,191,36,.7);background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.16)">
+          GIF
+        </button>
+
+        <button onclick="normalizeAudio()" id="normalizeBtn" title="EBU R128 loudness normalization"
+          class="nd flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+          style="color:rgba(16,185,129,.7);background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.16)">
+          Normalize
+        </button>
+
+        <button onclick="burnCaptionsToVideo()" id="burnCaptionsBtn" title="Burn captions into video permanently"
+          class="nd flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+          style="color:rgba(99,102,241,.7);background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.16)">
+          Captions
+        </button>
+
+        <div class="flex-1"></div>
+
+        <select id="speedSelect" aria-label="Preview playback speed" onchange="setSpeed()"
+          class="nd rounded-lg px-2 py-1.5 text-[11px] outline-none cursor-pointer"
+          style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.45)">
+          <option value="0.25">0.25×</option>
+          <option value="0.5">0.5×</option>
+          <option value="0.75">0.75×</option>
+          <option value="1" selected>1×</option>
+          <option value="1.5">1.5×</option>
+          <option value="2">2×</option>
+        </select>
+        <button onclick="toggleMute()" id="muteBtn" aria-label="Mute preview" aria-pressed="false"
+          class="nd w-7 h-7 rounded-lg flex items-center justify-center text-[13px] transition-all hover:bg-white/5">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18 6a9 9 0 0 1 0 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Video preview -->
+      <div class="flex-1 min-h-0 flex items-center justify-center relative overflow-hidden nd" id="previewArea"
+           style="background:#000">
+        <div id="previewStage" style="position:relative;overflow:hidden;max-width:100%;max-height:100%;background:#000">
+          <video id="previewBackdropVideo" muted aria-hidden="true" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;pointer-events:none;will-change:transform"></video>
+          <div id="previewBackdropWash" aria-hidden="true" style="display:none;position:absolute;inset:0;z-index:0;pointer-events:none"></div>
+          <div id="previewFrameSurface" aria-hidden="true" style="display:none;position:absolute;background:#08090c;z-index:1"></div>
+          <div id="previewFrameBar" aria-hidden="true" style="display:none;position:absolute;background:linear-gradient(#3d3d3f,#2c2c2e);box-shadow:inset 0 0 0 1px rgba(255,255,255,.10),inset 0 -1px rgba(255,255,255,.12);z-index:2">
+            <span data-frame-dot="0" style="position:absolute;top:50%;border-radius:999px;background:#ff5f57;transform:translateY(-50%)"></span>
+            <span data-frame-dot="1" style="position:absolute;top:50%;border-radius:999px;background:#febc2e;transform:translateY(-50%)"></span>
+            <span data-frame-dot="2" style="position:absolute;top:50%;border-radius:999px;background:#28c840;transform:translateY(-50%)"></span>
+          </div>
+          <div id="previewVideoViewport" aria-label="Video canvas" style="position:absolute;overflow:hidden;z-index:3;background:#000">
+            <video id="videoPreview" style="outline:none;position:absolute;inset:0;width:100%;height:100%;object-fit:fill;transform-origin:50% 50%;will-change:transform"></video>
+            <div id="privacyBlurPreviewLayer" role="group" aria-label="Privacy blur zones" style="position:absolute;inset:0;pointer-events:none;overflow:hidden"></div>
+            <div id="sourceOverlayPreviewLayer" aria-hidden="true" style="position:absolute;inset:0;z-index:8;pointer-events:none;overflow:hidden"></div>
+          </div>
+          <div id="textOverlayPreview" class="absolute pointer-events-none select-none"
+               style="display:none;font-size:28px;font-weight:700;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.8)"></div>
+        </div>
+      </div>
+
+      <!-- ── Screen Studio-style timeline ── -->
+      <div id="timelineArea" class="flex-shrink-0 nd select-none"
+           style="background:#0c0d12;border-top:1px solid rgba(255,255,255,.055)">
+
+        <!-- Ruler row with click-to-seek -->
+        <div class="relative flex-shrink-0" id="scrubBar"
+             style="height:28px;cursor:pointer;background:rgba(0,0,0,.48);border-bottom:1px solid rgba(255,255,255,.05)"
+             onclick="scrubClick(event)">
+          <canvas id="timeRuler" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas>
+          <!-- Blue circle handle rides the playhead -->
+          <div id="playheadHandle" style="left:0%"></div>
+          <!-- Thin playhead line in ruler -->
+          <div class="timeline-playhead" id="rulerPlayhead"></div>
+        </div>
+
+        <!-- Video / clip track -->
+        <div class="timeline-track" id="mainTrack"
+             style="height:58px;cursor:pointer"
+             onclick="trackClick(event)" onmousemove="trackHover(event)">
+          <!-- Shade: excluded zones outside trim -->
+          <div id="trimShadeLeft"  class="trim-shade" style="left:0;width:0"></div>
+          <div id="trimShadeRight" class="trim-shade" style="right:0;width:0"></div>
+          <!-- Amber clip fill (rounded, full inner height) -->
+          <div id="clipFill">
+            <!-- Center label: Clip / 9s ⊙ 1× -->
+            <div class="clip-track-label absolute inset-0 flex items-center justify-center gap-1 pointer-events-none select-none" style="z-index:3">
+              <span style="font-size:11px;font-weight:700;color:rgba(0,0,0,.68);letter-spacing:.02em">Clip</span>
+              <span style="font-size:10px;color:rgba(0,0,0,.42);font-weight:600">/</span>
+              <span id="clipDurationDisplay" style="font-size:11px;font-weight:700;color:rgba(0,0,0,.68)"></span>
+              <span style="font-size:10px;color:rgba(0,0,0,.42);font-weight:600">⊙ 1×</span>
+            </div>
+            <!-- In/out timestamps at clip edges -->
+            <span id="clipInLabel"  class="clip-track-edge absolute pointer-events-none select-none"
+                  style="left:7px;top:50%;transform:translateY(-50%);font-size:9px;font-weight:700;color:rgba(0,0,0,.42);z-index:4">0:00</span>
+            <span id="clipOutLabel" class="clip-track-edge absolute pointer-events-none select-none"
+                  style="right:7px;top:50%;transform:translateY(-50%);font-size:9px;font-weight:700;color:rgba(0,0,0,.42);z-index:4">0:00</span>
+          </div>
+          <!-- Trim handles with grip line -->
+          <div class="trim-handle" id="trimLeft"  style="left:0"            onmousedown="startTrim('left',event)">
+            <div style="width:2px;height:16px;background:rgba(255,255,255,.42);border-radius:1px"></div>
+          </div>
+          <div class="trim-handle" id="trimRight" style="right:0;left:auto" onmousedown="startTrim('right',event)">
+            <div style="width:2px;height:16px;background:rgba(255,255,255,.42);border-radius:1px"></div>
+          </div>
+          <!-- Keyframe / cut overlay -->
+          <div id="keyframeLayer" class="absolute inset-0 pointer-events-none"></div>
+          <!-- Playhead needle -->
+          <div class="timeline-playhead" id="playhead"></div>
+          <!-- Hidden shims (JS still references these) -->
+          <div id="scrubFill"  style="display:none"></div>
+          <div id="scrubThumb" style="display:none"></div>
+          <div id="timelineFill" class="hidden"></div>
+        </div>
+
+        <!-- Zoom / events track -->
+        <div class="timeline-track" id="kfTrack"
+             style="height:32px;background:rgba(0,0,0,.28);border-top:1px solid rgba(255,255,255,.04);cursor:pointer"
+             onclick="trackClick(event)">
+          <div id="kfTrackLayer" class="absolute inset-0"></div>
+          <div class="timeline-playhead" id="kfPlayhead" style="opacity:.35"></div>
+        </div>
+
+        <!-- Transport / status bar -->
+        <div class="flex items-center gap-3 px-3 flex-shrink-0"
+             style="height:34px;background:rgba(0,0,0,.36);border-top:1px solid rgba(255,255,255,.04)">
+          <span class="text-[10px] font-mono" style="color:rgba(255,255,255,.28)">
+            In:&nbsp;<span id="trimInDisplay" style="color:rgba(255,255,255,.5)">0:00</span>
+          </span>
+          <div class="flex-1 flex items-center justify-center gap-2">
+            <button onclick="if($('videoPreview'))$('videoPreview').currentTime=S.trimIn"
+                    class="nd w-6 h-6 flex items-center justify-center rounded transition-all hover:bg-white/5"
+                    style="color:rgba(255,255,255,.38);font-size:13px" title="Go to In point">⏮</button>
+            <button onclick="togglePlay()" id="playBtnTimeline"
+                    class="nd w-7 h-7 flex items-center justify-center rounded-lg transition-all hover:bg-white/8"
+                    style="color:rgba(255,255,255,.65);font-size:15px" title="Play / Pause">▶</button>
+            <button onclick="if($('videoPreview'))$('videoPreview').currentTime=S.trimOut"
+                    class="nd w-6 h-6 flex items-center justify-center rounded transition-all hover:bg-white/5"
+                    style="color:rgba(255,255,255,.38);font-size:13px" title="Go to Out point">⏭</button>
+          </div>
+          <span class="text-[10px] font-mono" style="color:rgba(255,255,255,.28)">
+            Out:&nbsp;<span id="trimOutDisplay" style="color:rgba(255,255,255,.5)">0:00</span>
+          </span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- RIGHT inspector panel: icon rail + content -->
+    <aside class="sf-inspector w-[268px] flex-shrink-0 flex nd" aria-label="Editor inspector"
+         style="background:#111217;border-left:1px solid rgba(255,255,255,.07)">
+
+      <!-- Icon rail -->
+      <div class="flex flex-col items-center pt-3 pb-3 gap-1 flex-shrink-0"
+           style="width:42px;border-right:1px solid rgba(255,255,255,.06)">
+
+        <!-- Background -->
+        <button class="insp-icon nd active" id="insp-bg" onclick="switchInspPanel('bg')" title="Background">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="m3 17 5-5 4 4 4-4 5 5"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/></svg>
+        </button>
+
+        <!-- Clip / trim -->
+        <button class="insp-icon nd" id="insp-clip" onclick="switchInspPanel('clip')" title="Clip">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="7" width="20" height="10" rx="2"/><path d="M7 7V4M17 7V4M7 17v3M17 17v3"/></svg>
+        </button>
+
+        <!-- Color -->
+        <button class="insp-icon nd" id="insp-color" onclick="switchInspPanel('color')" title="Color">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2.5" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="2.5" fill="currentColor" stroke="none"/><circle cx="10" cy="18" r="2.5" fill="currentColor" stroke="none"/></svg>
+        </button>
+
+        <!-- Zoom -->
+        <button class="insp-icon nd" id="insp-zoom" onclick="switchInspPanel('zoom')" title="Zoom">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35M11 8v6M8 11h6"/></svg>
+        </button>
+
+        <!-- Text -->
+        <button class="insp-icon nd" id="insp-text" onclick="switchInspPanel('text')" title="Text">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+        </button>
+
+        <!-- Cuts -->
+        <button class="insp-icon nd" id="insp-cuts" onclick="switchInspPanel('cuts')" title="Cuts">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></svg>
+        </button>
+
+        <!-- Blur / Privacy -->
+        <button class="insp-icon nd" id="insp-blur" onclick="switchInspPanel('blur')" title="Privacy blur">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1" fill="currentColor" stroke="none"/><circle cx="9" cy="15" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg>
+        </button>
+
+        <!-- Audio -->
+        <button class="insp-icon nd" id="insp-audio" onclick="switchInspPanel('audio')" title="Audio">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg>
+        </button>
+
+      </div>
+
+      <!-- Content panels -->
+      <div class="flex-1 overflow-y-auto min-w-0">
+
+        <!-- ── BACKGROUND ── -->
+        <div id="panel-bg" class="insp-panel p-3">
+          <p class="text-[12px] font-semibold mb-3" style="color:rgba(255,255,255,.88)">Background</p>
+
+          <!-- Tabs -->
+          <div class="flex gap-0.5 p-0.5 rounded-[8px] mb-3" style="background:rgba(0,0,0,.3)">
+            <button class="insp-tab active flex-1 py-1 rounded-[6px] text-[11px] font-medium nd"
+                    onclick="switchBgTab('gradient')" id="bgtab-gradient" aria-pressed="true">Gradient</button>
+            <button class="insp-tab flex-1 py-1 rounded-[6px] text-[11px] font-medium nd"
+                    onclick="switchBgTab('solid')" id="bgtab-solid" aria-pressed="false">Solid</button>
+          </div>
+
+          <!-- Gradient grid (3 columns) -->
+          <div id="bgGradientGrid" class="grid gap-2" style="grid-template-columns:repeat(3,1fr)">
+            <!-- populated by initInspBgGrid() -->
+          </div>
+
+          <!-- Solid color picker -->
+          <div id="bgSolidPanel" class="hidden space-y-2">
+            <input type="color" id="bgSolidColor" aria-label="Solid background color" value="#1a1a2e"
+                   class="w-full h-9 rounded-lg cursor-pointer border-none outline-none nd"
+                   style="background:none" oninput="applyBgSolid()">
+            <div class="grid grid-cols-4 gap-1.5">
+              <button type="button" onclick="setBgSolidQuick('#000000')" data-solid-color="#000000"
+                class="solid-bg-swatch h-8 rounded-lg cursor-pointer" style="background:#000" aria-label="Use black background" aria-pressed="false"></button>
+              <button type="button" onclick="setBgSolidQuick('#0f172a')" data-solid-color="#0f172a"
+                class="solid-bg-swatch h-8 rounded-lg cursor-pointer" style="background:#0f172a" aria-label="Use navy background" aria-pressed="false"></button>
+              <button type="button" onclick="setBgSolidQuick('#1e1e2e')" data-solid-color="#1e1e2e"
+                class="solid-bg-swatch h-8 rounded-lg cursor-pointer" style="background:#1e1e2e" aria-label="Use charcoal background" aria-pressed="false"></button>
+              <button type="button" onclick="setBgSolidQuick('#ffffff')" data-solid-color="#ffffff"
+                class="solid-bg-swatch h-8 rounded-lg cursor-pointer border" style="background:#fff;border-color:rgba(255,255,255,.15)" aria-label="Use white background" aria-pressed="false"></button>
+            </div>
+          </div>
+
+          <!-- Padding slider -->
+          <div class="mt-4">
+            <div class="flex justify-between mb-1.5">
+              <p class="text-[11px] font-medium" style="color:rgba(255,255,255,.5)">Padding</p>
+              <span class="text-[11px] font-mono" style="color:#60a5fa" id="bgPadVal">5%</span>
+            </div>
+            <input type="range" min="0" max="20" value="5" id="bgPaddingSlider"
+                   class="w-full h-[3px] cursor-pointer rounded-full nd" style="accent-color:#60a5fa"
+                   aria-label="Background padding"
+                   oninput="setBackgroundPadding(this.value)">
+          </div>
+
+          <!-- Blur slider -->
+          <div class="mt-3">
+            <div class="flex justify-between mb-1.5">
+              <p class="text-[11px] font-medium" style="color:rgba(255,255,255,.5)">Background blur</p>
+              <span class="text-[11px] font-mono" style="color:#60a5fa" id="bgBlurVal">40%</span>
+            </div>
+            <input type="range" min="0" max="100" value="40" id="bgBlurSlider"
+                   class="w-full h-[3px] cursor-pointer rounded-full nd" style="accent-color:#60a5fa"
+                   aria-label="Background blur"
+                   oninput="setBackgroundBlur(this.value)">
+          </div>
+        </div>
+
+        <!-- ── CLIP ── -->
+        <div id="panel-clip" class="insp-panel hidden p-3">
+
+          <!-- Header + shortcut hints -->
+          <div class="flex items-center justify-between mb-2.5">
+            <p class="text-[12px] font-semibold" style="color:rgba(255,255,255,.88)">Clip</p>
+            <div class="flex items-center gap-1" style="color:rgba(255,255,255,.22);font-size:10px">
+              <span class="kbd">I</span> in &nbsp;
+              <span class="kbd">O</span> out &nbsp;
+              <span class="kbd">C</span> cut
+            </div>
+          </div>
+
+          <!-- ── Mini-timeline ── -->
+          <div id="mtWrap" class="mb-3 nd" style="padding:0 4px">
+            <div class="mini-timeline-track" id="miniTimeline" onclick="miniTimelineSeek(event)">
+              <!-- Excluded shade left -->
+              <div id="mtShadeL" style="position:absolute;left:0;top:0;bottom:0;background:rgba(0,0,0,.58);border-radius:8px 0 0 8px;pointer-events:none;z-index:3;width:0"></div>
+              <!-- Amber clip fill -->
+              <div id="mtClipFill" style="position:absolute;top:5px;bottom:5px;background:linear-gradient(180deg,#f0a500,#c87400);border-radius:5px;pointer-events:none;z-index:2;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)"></div>
+              <!-- Excluded shade right -->
+              <div id="mtShadeR" style="position:absolute;right:0;top:0;bottom:0;background:rgba(0,0,0,.58);border-radius:0 8px 8px 0;pointer-events:none;z-index:3;width:0"></div>
+              <!-- Playhead -->
+              <div id="mtPlayhead" style="position:absolute;top:0;bottom:0;width:1.5px;background:rgba(96,165,250,.9);box-shadow:0 0 6px rgba(96,165,250,.5);pointer-events:none;z-index:10;transform:translateX(-50%);left:0"></div>
+              <!-- In handle -->
+              <div id="mtHandleIn" class="mt-handle nd" onmousedown="startMiniTrim('in',event)">
+                <div style="width:1.5px;height:12px;background:rgba(255,255,255,.65);border-radius:1px"></div>
+              </div>
+              <!-- Out handle -->
+              <div id="mtHandleOut" class="mt-handle nd" style="left:100%" onmousedown="startMiniTrim('out',event)">
+                <div style="width:1.5px;height:12px;background:rgba(255,255,255,.65);border-radius:1px"></div>
+              </div>
+            </div>
+            <!-- Time rail -->
+            <div class="flex justify-between mt-1" style="font-size:9px;font-family:monospace;color:rgba(255,255,255,.22)">
+              <span>0:00</span>
+              <span id="mtEndLabel">--</span>
+            </div>
+          </div>
+
+          <!-- In, duration, and out tiles. Click In or Out to set at playhead. -->
+          <div class="grid grid-cols-3 gap-1.5 mb-3">
+            <div class="rounded-lg p-2.5 text-center nd cursor-pointer" style="background:rgba(0,0,0,.35);border:1px solid rgba(251,191,36,.12)"
+                 onclick="setInPoint()" title="Set In to current time [I]">
+              <p class="text-[9px] font-semibold uppercase tracking-[.08em] mb-0.5" style="color:rgba(251,191,36,.5)">In</p>
+              <p class="text-[13px] font-mono font-bold leading-none" style="color:#fbbf24" id="clipInBig">0:00</p>
+            </div>
+            <div class="rounded-lg p-2.5 text-center" style="background:rgba(0,0,0,.2)">
+              <p class="text-[9px] font-semibold uppercase tracking-[.08em] mb-0.5" style="color:rgba(255,255,255,.22)">Dur</p>
+              <p class="text-[13px] font-mono font-bold leading-none" style="color:rgba(255,255,255,.65)" id="clipDurBig">0:00</p>
+            </div>
+            <div class="rounded-lg p-2.5 text-center nd cursor-pointer" style="background:rgba(0,0,0,.35);border:1px solid rgba(251,191,36,.12)"
+                 onclick="setOutPoint()" title="Set Out to current time [O]">
+              <p class="text-[9px] font-semibold uppercase tracking-[.08em] mb-0.5" style="color:rgba(251,191,36,.5)">Out</p>
+              <p class="text-[13px] font-mono font-bold leading-none" style="color:#fbbf24" id="clipOutBig">0:00</p>
+            </div>
+          </div>
+
+          <!-- Frame step + Cut at playhead -->
+          <div class="flex items-stretch gap-1.5 mb-3">
+            <button onclick="frameStep(-1)" title="Back 1 frame (Shift+←)"
+                    class="flex-1 py-2 rounded-lg text-[11px] font-medium nd"
+                    style="background:rgba(255,255,255,.04);color:rgba(255,255,255,.38);border:1px solid rgba(255,255,255,.07)">◂ 1f</button>
+            <button onclick="cutAtPlayhead()" title="Cut at playhead [C]"
+                    class="flex-[2] py-2 rounded-lg text-[12px] font-semibold nd flex items-center justify-center gap-1.5"
+                    style="background:rgba(248,113,113,.08);color:rgba(248,113,113,.8);border:1px solid rgba(248,113,113,.18)">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></svg>
+              Cut <span class="kbd ml-0.5">C</span>
+            </button>
+            <button onclick="frameStep(1)" title="Forward 1 frame (Shift+→)"
+                    class="flex-1 py-2 rounded-lg text-[11px] font-medium nd"
+                    style="background:rgba(255,255,255,.04);color:rgba(255,255,255,.38);border:1px solid rgba(255,255,255,.07)">1f ▸</button>
+          </div>
+
+          <!-- Speed -->
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-[11px] font-medium" style="color:rgba(255,255,255,.38)">Speed</p>
+            <div class="flex rounded-[8px] overflow-hidden" style="background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08)">
+              <button onclick="setSpeedAndSync(0.5,this)" class="zoom-level-btn px-2.5 py-1 text-[11px] font-medium nd" style="color:rgba(255,255,255,.32)">0.5×</button>
+              <div style="width:1px;background:rgba(255,255,255,.07)"></div>
+              <button onclick="setSpeedAndSync(1,this)" class="zoom-level-btn active px-2.5 py-1 text-[11px] font-medium nd">1×</button>
+              <div style="width:1px;background:rgba(255,255,255,.07)"></div>
+              <button onclick="setSpeedAndSync(1.5,this)" class="zoom-level-btn px-2.5 py-1 text-[11px] font-medium nd" style="color:rgba(255,255,255,.32)">1.5×</button>
+              <div style="width:1px;background:rgba(255,255,255,.07)"></div>
+              <button onclick="setSpeedAndSync(2,this)" class="zoom-level-btn px-2.5 py-1 text-[11px] font-medium nd" style="color:rgba(255,255,255,.32)">2×</button>
+            </div>
+          </div>
+
+          <!-- Reset -->
+          <button onclick="resetTrimToFull()"
+                  class="w-full py-2 rounded-lg text-[11px] font-medium nd"
+                  style="background:rgba(255,255,255,.04);color:rgba(255,255,255,.35);border:1px solid rgba(255,255,255,.07)">
+            Reset to full clip
+          </button>
+        </div>
+
+        <!-- ── COLOR ── -->
+        <div id="panel-color" class="insp-panel hidden p-3">
+          <p class="text-[12px] font-semibold mb-3" style="color:rgba(255,255,255,.88)">Color</p>
+          <div class="space-y-4">
+            <div>
+              <div class="flex justify-between mb-2">
+                <p class="text-[12px] font-medium" style="color:rgba(255,255,255,.6)">Brightness</p>
+                <span class="text-[11px] font-mono" style="color:#60a5fa" id="brightnessVal">0</span>
+              </div>
+              <input type="range" min="-50" max="50" value="0" id="brightness" aria-label="Brightness" oninput="updateAdjust()" class="w-full h-[3px] cursor-pointer rounded-full nd" style="accent-color:#60a5fa">
+            </div>
+            <div>
+              <div class="flex justify-between mb-2">
+                <p class="text-[12px] font-medium" style="color:rgba(255,255,255,.6)">Contrast</p>
+                <span class="text-[11px] font-mono" style="color:#60a5fa" id="contrastVal">0</span>
+              </div>
+              <input type="range" min="-50" max="50" value="0" id="contrast" aria-label="Contrast" oninput="updateAdjust()" class="w-full h-[3px] cursor-pointer rounded-full nd" style="accent-color:#60a5fa">
+            </div>
+            <div>
+              <div class="flex justify-between mb-2">
+                <p class="text-[12px] font-medium" style="color:rgba(255,255,255,.6)">Saturation</p>
+                <span class="text-[11px] font-mono" style="color:#60a5fa" id="saturationVal">0</span>
+              </div>
+              <input type="range" min="-50" max="50" value="0" id="saturation" aria-label="Saturation" oninput="updateAdjust()" class="w-full h-[3px] cursor-pointer rounded-full nd" style="accent-color:#60a5fa">
+            </div>
+            <!-- Reset -->
+            <button onclick="['brightness','contrast','saturation'].forEach(k=>{$(k).value=0;$(k+'Val').textContent=0});updateAdjust()"
+                    class="w-full py-2 rounded-lg text-[11px] nd"
+                    style="background:rgba(255,255,255,.04);color:rgba(255,255,255,.35);border:1px solid rgba(255,255,255,.07)">Reset to default</button>
+          </div>
+        </div>
+
+        <!-- ── ZOOM ── -->
+        <div id="panel-zoom" class="insp-panel hidden p-3">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-[12px] font-semibold" style="color:rgba(255,255,255,.88)">Zoom</p>
+            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded" style="background:rgba(251,191,36,.12);color:rgba(251,191,36,.7)" id="zoomCount">0 shots</span>
+          </div>
+          <section class="creator-director-card nd" aria-labelledby="directorTitle">
+            <div class="creator-kicker" id="directorTitle">Action Director</div>
+            <p class="creator-copy text-[10px] mt-1 mb-3 leading-relaxed">
+              Groups related interactions into steady shots and keeps focus clear of your camera and captions.
+            </p>
+            <div class="grid grid-cols-[1fr_auto] gap-2">
+              <label class="sr-only" for="directorProfile">Direction profile</label>
+              <select id="directorProfile" class="creator-control rounded-lg px-2 py-2 text-[11px] outline-none"
+                      onchange="setDirectorProfile(this.value)">
+                <option value="calm">Calm</option>
+                <option value="tutorial" selected>Tutorial</option>
+                <option value="energetic">Energetic</option>
+              </select>
+              <button class="creator-run rounded-lg px-3 py-2 text-[10px] font-bold tracking-wide"
+                      onclick="generateActionDirector()">Generate</button>
+            </div>
+            <div class="flex items-center justify-between mt-2 gap-2">
+              <span id="directorSummary" class="creator-copy text-[10px]">Ready for interaction data</span>
+              <button id="directorUndoBtn" class="hidden creator-copy text-[10px] underline underline-offset-2"
+                      onclick="undoActionDirector()">Undo</button>
+            </div>
+          </section>
+          <div id="zoomKfList" class="space-y-1.5">
+            <p class="text-[11px] py-4 text-center" style="color:rgba(255,255,255,.2)">No zoom keyframes yet</p>
+          </div>
+        </div>
+
+        <!-- ── TEXT ── -->
+        <div id="panel-text" class="insp-panel hidden p-3">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-[12px] font-semibold" style="color:rgba(255,255,255,.88)">Text overlays</p>
+            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded" style="background:rgba(74,222,128,.12);color:rgba(74,222,128,.7)" id="textCount">0</span>
+          </div>
+          <div id="textKfList" class="space-y-1.5">
+            <p class="text-[11px] py-4 text-center" style="color:rgba(255,255,255,.2)">No text overlays yet</p>
+          </div>
+        </div>
+
+        <!-- ── CUTS ── -->
+        <div id="panel-cuts" class="insp-panel hidden p-3">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-[12px] font-semibold" style="color:rgba(255,255,255,.88)">Cuts</p>
+            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded" style="background:rgba(248,113,113,.12);color:rgba(248,113,113,.6)" id="cutCount">0</span>
+          </div>
+
+          <!-- Cut at playhead, primary action -->
+          <button onclick="cutAtPlayhead()"
+                  class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl mb-2 nd"
+                  style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.18);color:rgba(248,113,113,.85)">
+            <div class="flex items-center gap-2">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></svg>
+              <span class="text-[12px] font-semibold">Cut at playhead</span>
+            </div>
+            <span class="kbd" style="color:rgba(248,113,113,.5);border-color:rgba(248,113,113,.2);background:rgba(248,113,113,.1)">C</span>
+          </button>
+
+          <!-- Razor mode toggle -->
+          <button onclick="toggleRazorMode()" id="btn-razor-panel"
+                  class="w-full flex items-center justify-between px-3 py-2 rounded-lg mb-3 nd"
+                  style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.38)">
+            <div class="flex items-center gap-2">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20"/></svg>
+              <span class="text-[11px] font-medium">Split mode</span>
+            </div>
+            <span id="razorPanelStatus" class="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                  style="background:rgba(255,255,255,.06);color:rgba(255,255,255,.2)">OFF</span>
+          </button>
+
+          <div id="cutList" class="space-y-1.5">
+            <p class="text-[11px] italic py-3 text-center" style="color:rgba(255,255,255,.18)">No cuts yet</p>
+          </div>
+        </div>
+
+        <!-- ── BLUR / PRIVACY ── -->
+        <div id="panel-blur" class="insp-panel hidden p-3">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-[12px] font-semibold" style="color:rgba(255,255,255,.88)">Privacy Blur</p>
+            <button onclick="addBlurZone()"
+              class="nd flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold"
+              style="background:rgba(139,92,246,.12);color:rgba(139,92,246,.85);border:1px solid rgba(139,92,246,.25)">
+              + Add zone
+            </button>
+          </div>
+
+          <p class="text-[11px] mb-3" style="color:rgba(255,255,255,.28)">
+            Add blur regions to hide sensitive information. Zones are applied at export time.
+          </p>
+
+          <div id="blurZoneList" class="space-y-1.5">
+            <p class="text-[11px] italic py-2 text-center" style="color:rgba(255,255,255,.18)">No blur zones</p>
+          </div>
+
+          <!-- Quick blur zone editor -->
+          <div class="mt-3 pt-3 space-y-2.5" style="border-top:1px solid rgba(255,255,255,.06)">
+            <p class="text-[10px] font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,.22)">Selected zone</p>
+            <p id="blurSelectionHelp" class="text-[10px] leading-relaxed" style="color:rgba(255,255,255,.3)">Select a zone, then drag it directly on the preview. Use the corner handle to resize.</p>
+            <div id="blurTimingControls" class="hidden grid grid-cols-2 gap-2">
+              <label class="text-[10px]" style="color:rgba(255,255,255,.4)">Start
+                <input id="blurStartInput" type="number" min="0" step="0.1" value="0"
+                       aria-label="Privacy blur start time"
+                       class="creator-control w-full rounded px-2 py-1 mt-1 text-[10px]"
+                       onchange="updateSelectedBlurTiming('startTime', this.value)">
+              </label>
+              <label class="text-[10px]" style="color:rgba(255,255,255,.4)">End
+                <input id="blurEndInput" type="number" min="0" step="0.1" value="3"
+                       aria-label="Privacy blur end time"
+                       class="creator-control w-full rounded px-2 py-1 mt-1 text-[10px]"
+                       onchange="updateSelectedBlurTiming('endTime', this.value)">
+              </label>
+            </div>
+            <div class="flex items-center justify-between">
+              <label for="blurRadiusSlider" class="text-[11px]" style="color:rgba(255,255,255,.4)">Blur strength</label>
+              <div class="flex items-center gap-2">
+                <input type="range" min="5" max="40" value="20" id="blurRadiusSlider"
+                  class="w-20 cursor-pointer" style="accent-color:#8b5cf6"
+                  aria-label="Privacy blur strength"
+                  oninput="updateSelectedBlurRadius(this.value)">
+                <span class="text-[10px] font-mono" style="color:#a78bfa" id="blurRadiusVal">20</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── AUDIO ── -->
+        <div id="panel-audio" class="insp-panel hidden p-3">
+          <p class="text-[12px] font-semibold mb-3" style="color:rgba(255,255,255,.88)">Audio</p>
+
+          <!-- Audio cleanup toggle -->
+          <div class="option-row flex items-center justify-between px-2 py-2.5 mb-1 nd" onclick="toggleSetting('audioCleanup')">
+            <div>
+              <p class="text-[12px] font-medium" style="color:rgba(255,255,255,.8)">Audio cleanup</p>
+              <p class="text-[10px] mt-0.5" style="color:rgba(255,255,255,.28)">Noise reduction, EQ, compression</p>
+            </div>
+            <div class="toggle-on cursor-pointer shrink-0" id="toggle-audioCleanup">
+              <div class="toggle-track w-9 h-5 rounded-full relative">
+                <div class="toggle-thumb absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Export speed multiplier -->
+          <div class="mt-3 pt-3" style="border-top:1px solid rgba(255,255,255,.06)">
+            <p class="text-[11px] font-semibold mb-2" style="color:rgba(255,255,255,.5)">Export speed</p>
+            <p class="text-[10px] mb-3" style="color:rgba(255,255,255,.25)">Speed up or slow down the entire video at export.</p>
+            <div class="grid grid-cols-4 gap-1.5">
+              <button onclick="setSpeedMultiplier(0.5);this.closest('.grid').querySelectorAll('button').forEach(b=>b.style.background='rgba(255,255,255,.04)');this.style.background='rgba(139,92,246,.2)'"
+                class="py-2 rounded-lg text-[11px] font-bold nd"
+                style="background:rgba(255,255,255,.04);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.08)">0.5×</button>
+              <button onclick="setSpeedMultiplier(1);this.closest('.grid').querySelectorAll('button').forEach(b=>b.style.background='rgba(255,255,255,.04)');this.style.background='rgba(139,92,246,.2)'"
+                class="py-2 rounded-lg text-[11px] font-bold nd"
+                style="background:rgba(139,92,246,.2);color:rgba(255,255,255,.8);border:1px solid rgba(139,92,246,.3)">1×</button>
+              <button onclick="setSpeedMultiplier(2);this.closest('.grid').querySelectorAll('button').forEach(b=>b.style.background='rgba(255,255,255,.04)');this.style.background='rgba(139,92,246,.2)'"
+                class="py-2 rounded-lg text-[11px] font-bold nd"
+                style="background:rgba(255,255,255,.04);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.08)">2×</button>
+              <button onclick="setSpeedMultiplier(4);this.closest('.grid').querySelectorAll('button').forEach(b=>b.style.background='rgba(255,255,255,.04)');this.style.background='rgba(139,92,246,.2)'"
+                class="py-2 rounded-lg text-[11px] font-bold nd"
+                style="background:rgba(255,255,255,.04);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.08)">4×</button>
+            </div>
+          </div>
+
+          <!-- Captions -->
+          <div class="mt-3 pt-3" style="border-top:1px solid rgba(255,255,255,.06)">
+            <div class="option-row flex items-center justify-between px-2 py-2.5 nd" onclick="toggleSetting('captions')">
+              <div>
+                <p class="text-[12px] font-medium" style="color:rgba(255,255,255,.8)">Auto-captions</p>
+                <p class="text-[10px] mt-0.5" style="color:rgba(255,255,255,.28)">Whisper AI transcription</p>
+              </div>
+              <div class="toggle-on cursor-pointer shrink-0" id="toggle-captions">
+                <div class="toggle-track w-9 h-5 rounded-full relative">
+                  <div class="toggle-thumb absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm"></div>
+                </div>
+              </div>
+            </div>
+            <button onclick="generateTranscript()"
+              class="w-full mt-2 py-2 rounded-lg text-[11px] font-medium nd"
+              style="background:rgba(56,217,245,.06);color:rgba(56,217,245,.65);border:1px solid rgba(56,217,245,.15)">
+              Generate captions (Whisper)
+            </button>
+            <button onclick="burnCaptionsToVideo()" id="burnCaptionsBtn2"
+              class="w-full mt-1.5 py-2 rounded-lg text-[11px] font-medium nd"
+              style="background:rgba(99,102,241,.06);color:rgba(99,102,241,.65);border:1px solid rgba(99,102,241,.15)">
+              Embed captions in video
+            </button>
+          </div>
+
+          <!-- Silence detection -->
+          <div class="mt-3 pt-3" style="border-top:1px solid rgba(255,255,255,.06)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <div>
+                <p class="text-[12px] font-semibold" style="color:rgba(255,255,255,.7)">Smart Silence</p>
+                <p id="removalSummary" class="text-[9px] mt-0.5" style="color:rgba(255,255,255,.28)">Nothing removed</p>
+              </div>
+              <button id="removeAllSilencesBtn" onclick="cutAllSilences()" style="
+                padding:3px 8px;border-radius:5px;border:none;font-size:10px;font-weight:600;
+                background:rgba(248,113,113,.1);color:#fca5a5;cursor:pointer">Remove All</button>
+            </div>
+            <div class="grid grid-cols-3 gap-1.5 mb-2">
+              <label class="text-[9px]" style="color:rgba(255,255,255,.35)">
+                Sensitivity
+                <select id="silenceThreshold" class="creator-control w-full rounded px-1.5 py-1 mt-1 text-[9px] outline-none"
+                        onchange="setSilenceOption('silenceThreshold', this.value)">
+                  <option value="-40">Gentle</option>
+                  <option value="-35" selected>Balanced</option>
+                  <option value="-30">Tight</option>
+                </select>
+              </label>
+              <label class="text-[9px]" style="color:rgba(255,255,255,.35)">
+                Min pause
+                <select id="silenceMinDuration" class="creator-control w-full rounded px-1.5 py-1 mt-1 text-[9px] outline-none"
+                        onchange="setSilenceOption('silenceMinDuration', this.value)">
+                  <option value="0.3">0.3s</option>
+                  <option value="0.5" selected>0.5s</option>
+                  <option value="0.8">0.8s</option>
+                  <option value="1.2">1.2s</option>
+                </select>
+              </label>
+              <label class="text-[9px]" style="color:rgba(255,255,255,.35)">
+                Speech padding
+                <select id="silencePadding" class="creator-control w-full rounded px-1.5 py-1 mt-1 text-[9px] outline-none"
+                        onchange="setSilenceOption('silencePadding', this.value)">
+                  <option value="0.05">0.05s</option>
+                  <option value="0.12" selected>0.12s</option>
+                  <option value="0.2">0.20s</option>
+                  <option value="0.3">0.30s</option>
+                </select>
+              </label>
+            </div>
+            <button id="silenceDetectBtn" onclick="runSilenceDetect()"
+              class="w-full py-2 rounded-lg text-[11px] font-medium nd mb-2"
+              style="background:rgba(251,191,36,.06);color:rgba(251,191,36,.65);border:1px solid rgba(251,191,36,.15)">
+              Analyze pauses
+            </button>
+            <div id="silenceList" style="font-size:11px;color:rgba(255,255,255,.3);max-height:160px;overflow-y:auto">
+              Analyze to review pauses before removing them
+            </div>
+          </div>
+
+          <!-- Chapter export -->
+          <div class="mt-3 pt-3" style="border-top:1px solid rgba(255,255,255,.06)">
+            <p class="text-[12px] font-semibold mb-2" style="color:rgba(255,255,255,.7)">📚 Chapters</p>
+            <button onclick="exportChapters()"
+              class="w-full py-2 rounded-lg text-[11px] font-medium nd"
+              style="background:rgba(16,185,129,.06);color:rgba(16,185,129,.65);border:1px solid rgba(16,185,129,.15)">
+              Copy YouTube chapters
+            </button>
+          </div>
+
+          <!-- Background music -->
+          <div class="mt-3 pt-3" style="border-top:1px solid rgba(255,255,255,.06)">
+            <p class="text-[12px] font-semibold mb-2" style="color:rgba(255,255,255,.7)">🎵 Background Music</p>
+            <button onclick="pickBackgroundMusic()"
+              class="w-full py-2 rounded-lg text-[11px] font-medium nd"
+              style="background:rgba(139,92,246,.06);color:rgba(139,92,246,.65);border:1px solid rgba(139,92,246,.15)">
+              Pick music file…
+            </button>
+            <div id="bgMusicRow" style="display:none;align-items:center;gap:6px;margin-top:6px">
+              <span style="font-size:18px">🎵</span>
+              <span id="bgMusicName" style="font-size:11px;color:#dce8f8;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">None</span>
+              <button onclick="clearBackgroundMusic()" style="font-size:10px;color:#fca5a5;background:none;border:none;cursor:pointer">✕</button>
+            </div>
+            <div id="bgMusicControls" class="hidden mt-2 space-y-2">
+              <label class="flex items-center gap-2 text-[10px]" style="color:rgba(255,255,255,.4)">
+                Level
+                <input id="bgMusicVolume" class="flex-1" type="range" min="2" max="35" value="12"
+                       oninput="setMusicVolume(this.value)">
+                <span id="bgMusicVolumeLabel" class="w-7 text-right">12%</span>
+              </label>
+              <label class="flex items-center justify-between text-[10px]" style="color:rgba(255,255,255,.4)">
+                Duck under narration
+                <input id="musicDucking" type="checkbox" checked onchange="setMusicDucking(this.checked)">
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- hidden compat IDs still needed by JS -->
+        <div style="display:none">
+          <div id="eventKfList"></div>
+        </div>
+
+      </div>
+    </aside>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     EXPORT MODAL
+═══════════════════════════════════════════════════ -->
+<div id="exportModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-labelledby="exportDialogTitle">
+  <div class="card rounded-2xl w-full nd" style="max-width:400px;max-height:92vh;overflow-y:auto">
+
+    <!-- Header -->
+    <div class="px-5 pt-5 pb-4 flex items-center justify-between sticky top-0 z-10"
+         style="border-bottom:1px solid rgba(255,255,255,.07);background:rgba(13,17,24,.97);backdrop-filter:blur(16px)">
+      <div>
+        <p id="exportDialogTitle" class="font-bold text-text">Export video</p>
+        <p class="text-xs text-muted mt-0.5" id="exportDestLabel">Saves to Desktop</p>
+      </div>
+      <button onclick="closeExportPanel()" aria-label="Close export" class="nd text-muted hover:text-text text-xl leading-none transition-colors">×</button>
+    </div>
+
+    <div class="p-5 space-y-3">
+
+      <!-- Platform preset chips -->
+      <div>
+        <p class="text-[10px] font-semibold uppercase tracking-widest mb-2" style="color:rgba(255,255,255,.22)">Platform</p>
+        <div class="flex flex-wrap gap-1.5">
+          <button type="button" data-export-preset="youtube" aria-pressed="true" onclick="$('exportPreset').value='youtube';applyExportPreset();highlightPresetChip(this)"
+            class="export-chip nd px-2.5 py-1 rounded-full text-[11px] font-semibold active"
+            style="background:rgba(255,0,0,.12);color:rgba(255,100,100,.9);border:1px solid rgba(255,0,0,.2)">YouTube</button>
+          <button type="button" data-export-preset="youtube4k" aria-pressed="false" onclick="$('exportPreset').value='youtube4k';applyExportPreset();highlightPresetChip(this)"
+            class="export-chip nd px-2.5 py-1 rounded-full text-[11px] font-semibold"
+            style="background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.1)">YouTube 4K</button>
+          <button type="button" data-export-preset="shorts" aria-pressed="false" onclick="$('exportPreset').value='shorts';applyExportPreset();highlightPresetChip(this)"
+            class="export-chip nd px-2.5 py-1 rounded-full text-[11px] font-semibold"
+            style="background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.1)">Shorts</button>
+          <button type="button" data-export-preset="tiktok" aria-pressed="false" onclick="$('exportPreset').value='tiktok';applyExportPreset();highlightPresetChip(this)"
+            class="export-chip nd px-2.5 py-1 rounded-full text-[11px] font-semibold"
+            style="background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.1)">TikTok</button>
+          <button type="button" data-export-preset="twitter" aria-pressed="false" onclick="$('exportPreset').value='twitter';applyExportPreset();highlightPresetChip(this)"
+            class="export-chip nd px-2.5 py-1 rounded-full text-[11px] font-semibold"
+            style="background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.1)">X/Twitter</button>
+          <button type="button" data-export-preset="linkedin" aria-pressed="false" onclick="$('exportPreset').value='linkedin';applyExportPreset();highlightPresetChip(this)"
+            class="export-chip nd px-2.5 py-1 rounded-full text-[11px] font-semibold"
+            style="background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.1)">LinkedIn</button>
+          <button type="button" data-export-preset="instagram" aria-pressed="false" onclick="$('exportPreset').value='instagram';applyExportPreset();highlightPresetChip(this)"
+            class="export-chip nd px-2.5 py-1 rounded-full text-[11px] font-semibold"
+            style="background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.1)">Instagram</button>
+          <button type="button" data-export-preset="loom" aria-pressed="false" onclick="$('exportPreset').value='loom';applyExportPreset();highlightPresetChip(this)"
+            class="export-chip nd px-2.5 py-1 rounded-full text-[11px] font-semibold"
+            style="background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.1)">Loom</button>
+          <button type="button" data-export-preset="gif" aria-pressed="false" onclick="$('exportPreset').value='gif';applyExportPreset();highlightPresetChip(this)"
+            class="export-chip nd px-2.5 py-1 rounded-full text-[11px] font-semibold"
+            style="background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.1)">GIF</button>
+          <button type="button" data-export-preset="source" aria-pressed="false" onclick="$('exportPreset').value='source';applyExportPreset();highlightPresetChip(this)"
+            class="export-chip nd px-2.5 py-1 rounded-full text-[11px] font-semibold"
+            style="background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.1)">Source</button>
+        </div>
+        <!-- Hidden preset select (still read by applyExportPreset) -->
+        <select id="exportPreset" class="hidden" onchange="applyExportPreset()">
+          <option value="youtube" selected>YouTube</option>
+          <option value="youtube4k">YouTube 4K</option>
+          <option value="shorts">Shorts</option>
+          <option value="tiktok">TikTok</option>
+          <option value="twitter">X/Twitter</option>
+          <option value="linkedin">LinkedIn</option>
+          <option value="instagram">Instagram</option>
+          <option value="instagram16">Instagram 4:5</option>
+          <option value="loom">Loom</option>
+          <option value="hevc">HEVC</option>
+          <option value="gif">GIF</option>
+          <option value="webm">WebM</option>
+          <option value="retina">Retina 1440p</option>
+          <option value="source">Source</option>
+        </select>
+      </div>
+
+      <div style="height:1px;background:rgba(255,255,255,.06)"></div>
+
+      <!-- Format / Resolution / Quality row -->
+      <div class="space-y-2.5">
+        <div class="flex justify-between items-center">
+          <p class="text-sm text-dim">Format</p>
+          <select id="exportFormat" aria-label="Export format"
+            class="rounded-lg px-2.5 py-1.5 text-xs text-text outline-none border border-border cursor-pointer nd"
+            style="background:rgba(255,255,255,.04)">
+            <option value="mp4">MP4 (H.264)</option>
+            <option value="mp4_hevc">MP4 (HEVC)</option>
+            <option value="gif">Animated GIF</option>
+          </select>
+        </div>
+        <div class="flex justify-between items-center">
+          <p class="text-sm text-dim">Resolution</p>
+          <select id="exportRes" aria-label="Export resolution" onchange="onExportResolutionChange()"
+            class="rounded-lg px-2.5 py-1.5 text-xs text-text outline-none border border-border cursor-pointer nd"
+            style="background:rgba(255,255,255,.04)">
+            <option value="1280:720">1280 × 720</option>
+            <option value="960:540">960 × 540</option>
+            <option value="1920:1080" selected>1920 × 1080</option>
+            <option value="1080:1080">1080 × 1080 (Square)</option>
+            <option value="1080:1350">1080 × 1350 (4:5)</option>
+            <option value="1080:1920">1080 × 1920 (Vertical)</option>
+            <option value="2560:1440">2560 × 1440</option>
+            <option value="3840:2160">3840 × 2160 (4K)</option>
+            <option value="source">Source resolution</option>
+          </select>
+        </div>
+        <div class="flex justify-between items-center">
+          <p class="text-sm text-dim">Quality (CRF)</p>
+          <select id="exportQuality" aria-label="Export quality"
+            class="rounded-lg px-2.5 py-1.5 text-xs text-text outline-none border border-border cursor-pointer nd"
+            style="background:rgba(255,255,255,.04)">
+            <option value="12">Maximum</option>
+            <option value="15">High</option>
+            <option value="18" selected>Balanced</option>
+            <option value="22">Good</option>
+            <option value="28">Smaller file</option>
+          </select>
+        </div>
+        <div class="flex justify-between items-center">
+          <p class="text-sm text-dim">Background pad</p>
+          <div id="toggle-export-pad" onclick="toggleExportPresentation(this)" class="toggle-on cursor-pointer nd">
+            <div class="toggle-track w-9 h-5 rounded-full relative">
+              <div class="toggle-thumb absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:1px;background:rgba(255,255,255,.06)"></div>
+
+      <!-- Output folder -->
+      <div class="flex justify-between items-center">
+        <p class="text-sm text-dim">Save to</p>
+        <button onclick="chooseOutputDir()"
+          class="nd flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all"
+          style="background:rgba(255,255,255,.05);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.09)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span id="outputDirLabel">Desktop</span>
+        </button>
+      </div>
+
+      <!-- Watermark -->
+      <div class="rounded-xl p-3 space-y-2" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07)">
+        <div class="flex items-center justify-between">
+          <p class="text-sm font-medium" style="color:rgba(255,255,255,.7)">Watermark</p>
+          <div id="toggle-watermark"
+            onclick="S.cfg.watermark.enabled=!S.cfg.watermark.enabled;this.classList.toggle('toggle-on');$('watermarkFields').classList.toggle('hidden',!S.cfg.watermark.enabled)"
+            class="cursor-pointer nd">
+            <div class="toggle-track w-9 h-5 rounded-full relative">
+              <div class="toggle-thumb absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow"></div>
+            </div>
+          </div>
+        </div>
+        <div id="watermarkFields" class="hidden space-y-2">
+          <input type="text" id="watermarkText" aria-label="Watermark text" placeholder="Watermark text…" maxlength="60"
+            oninput="S.cfg.watermark.text=this.value"
+            class="w-full rounded-lg px-3 py-1.5 text-xs text-text outline-none nd"
+            style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09)">
+          <div class="flex gap-2">
+            <select id="watermarkPosition" aria-label="Watermark position" onchange="S.cfg.watermark.position=this.value"
+              class="flex-1 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer nd"
+              style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);color:rgba(255,255,255,.6)">
+              <option value="br" selected>Bottom right</option>
+              <option value="bl">Bottom left</option>
+              <option value="tr">Top right</option>
+              <option value="tl">Top left</option>
+              <option value="bc">Bottom center</option>
+            </select>
+            <input type="range" id="watermarkOpacity" aria-label="Watermark opacity" min="10" max="100" value="50" title="Opacity"
+              oninput="S.cfg.watermark.opacity=this.value/100"
+              class="flex-1 cursor-pointer" style="accent-color:#60a5fa">
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div id="exportProgress" class="hidden" role="group" aria-label="Export progress">
+        <div class="w-full rounded-full h-1.5" style="background:rgba(255,255,255,.08)">
+          <div id="exportProgressBar" class="h-1.5 rounded-full transition-all duration-300"
+               role="progressbar" aria-label="Video export" aria-valuemin="0" aria-valuemax="100" aria-valuenow="5"
+               style="width:5%;background:linear-gradient(90deg,#3b82f6,#60a5fa)"></div>
+        </div>
+        <p class="text-xs text-muted mt-2 text-center" id="exportProgressText" role="status" aria-live="polite">Exporting…</p>
+      </div>
+
+      <!-- Post-export actions (revealed after done) -->
+      <div id="exportActions" class="hidden flex gap-2">
+        <button id="exportRevealBtn"
+          class="flex-1 py-2 rounded-lg text-[11px] font-semibold nd flex items-center justify-center gap-1.5"
+          style="background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.2)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Show in Finder
+        </button>
+        <button id="exportCopyBtn"
+          class="flex-1 py-2 rounded-lg text-[11px] font-semibold nd flex items-center justify-center gap-1.5"
+          style="background:rgba(255,255,255,.06);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.09)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy path
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Footer actions -->
+    <div class="px-5 pb-5 flex gap-2 sticky bottom-0"
+         style="background:rgba(13,17,24,.97);backdrop-filter:blur(16px);border-top:1px solid rgba(255,255,255,.06);padding-top:12px">
+      <button onclick="closeExportPanel()" class="flex-1 py-2.5 rounded-xl btn-ghost text-dim text-sm hover:text-text transition-all nd">Close</button>
+      <button id="exportCancelBtn" onclick="cancelExport()" class="hidden flex-1 py-2.5 rounded-xl text-sm font-semibold nd"
+              style="background:rgba(248,113,113,.1);color:rgba(248,113,113,.9);border:1px solid rgba(248,113,113,.2)">Cancel</button>
+      <button onclick="runExport()" id="exportBtn" class="flex-1 py-2.5 rounded-xl btn-cta text-sm nd">Export</button>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     TEXT OVERLAY MODAL
+═══════════════════════════════════════════════════ -->
+<div id="textModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="textDialogTitle">
+  <div class="card rounded-2xl w-full nd" style="max-width:600px;max-height:90vh;overflow-y:auto">
+
+    <div class="flex items-center justify-between px-5 pt-4 pb-3 sticky top-0 z-10"
+         style="border-bottom:1px solid rgba(255,255,255,.07);background:rgba(13,17,24,.95);backdrop-filter:blur(16px)">
+      <p id="textDialogTitle" class="font-semibold text-sm">Text overlay</p>
+      <button onclick="closeTextModal()" aria-label="Close text overlay" class="text-muted hover:text-text text-xl leading-none transition-colors">×</button>
+    </div>
+
+    <div class="p-5 space-y-4">
+
+      <textarea id="textContent" aria-label="Text overlay content" rows="2" placeholder="Type your text…" maxlength="200"
+        oninput="liveTextPreview()"
+        class="w-full rounded-xl px-4 py-3 text-sm text-text outline-none resize-none transition-colors"
+        style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);"
+        onfocus="this.style.borderColor='rgba(94,234,212,.4)'" onblur="this.style.borderColor='rgba(255,255,255,.09)'"></textarea>
+
+      <div>
+        <p class="text-[11px] text-muted font-medium tracking-wide mb-2">Quick style</p>
+        <div id="presetGrid" class="grid grid-cols-4 gap-2"></div>
+      </div>
+
+      <div>
+        <p class="text-[11px] text-muted font-medium tracking-wide mb-2">Typography</p>
+        <div class="flex flex-wrap gap-2 items-center">
+          <select id="textFont" aria-label="Text font" onchange="onTextFontChange()"
+            class="rounded-lg px-2 py-1.5 text-xs text-text outline-none border border-border cursor-pointer"
+            style="background:rgba(255,255,255,.04)">
+            <option value="-apple-system,BlinkMacSystemFont,sans-serif">System</option>
+            <option value="Georgia,serif">Georgia</option>
+            <option value="'Courier New',monospace">Courier</option>
+            <option value="Arial,sans-serif">Arial</option>
+            <option value="Impact,sans-serif">Impact</option>
+          </select>
+          <span class="text-xs text-dim">Size</span>
+          <input type="range" id="textSize" aria-label="Text size" min="14" max="120" value="32"
+            oninput="$('textSizeVal').textContent=this.value+'px';liveTextPreview()"
+            class="w-24 accent-accent cursor-pointer">
+          <span id="textSizeVal" class="text-xs font-mono text-accent w-8">32px</span>
+          <button id="btn-bold" aria-label="Bold" aria-pressed="true" onclick="toggleTextStyle('bold')" class="px-2.5 py-1 rounded-lg border border-border text-muted text-xs font-bold hover:border-accent/40 transition-colors">B</button>
+          <button id="btn-italic" aria-label="Italic" aria-pressed="false" onclick="toggleTextStyle('italic')" class="px-2.5 py-1 rounded-lg border border-border text-muted text-xs italic hover:border-accent/40 transition-colors">I</button>
+          <button id="btn-shadow" aria-label="Shadow" aria-pressed="false" onclick="toggleTextStyle('shadow')" class="px-2.5 py-1 rounded-lg border border-border text-muted text-xs hover:border-accent/40 transition-colors">Shadow</button>
+          <button id="btn-outline" aria-label="Outline" aria-pressed="false" onclick="toggleTextStyle('outline')" class="px-2.5 py-1 rounded-lg border border-border text-muted text-xs hover:border-accent/40 transition-colors">Outline</button>
+          <label class="flex items-center gap-1.5 ml-auto cursor-pointer">
+            <span class="text-xs text-dim">Color</span>
+            <input type="color" id="textColor" aria-label="Text color" value="#ffffff" oninput="liveTextPreview()"
+              class="w-7 h-7 rounded border border-border cursor-pointer p-0.5"
+              style="background:rgba(255,255,255,.04)">
+          </label>
+        </div>
+      </div>
+
+      <div class="flex gap-4">
+        <div class="flex-shrink-0">
+          <p class="text-xs text-dim mb-1.5">Position</p>
+          <div class="grid grid-cols-3 gap-1" style="width:80px">
+            <button class="pos-btn border border-border text-muted rounded text-xs py-1.5 hover:border-accent/40 transition-colors" id="pos-tl" aria-label="Top left" aria-pressed="false" onclick="setTextPos('tl')">↖</button>
+            <button class="pos-btn border border-border text-muted rounded text-xs py-1.5 hover:border-accent/40 transition-colors" id="pos-tc" aria-label="Top center" aria-pressed="false" onclick="setTextPos('tc')">↑</button>
+            <button class="pos-btn border border-border text-muted rounded text-xs py-1.5 hover:border-accent/40 transition-colors" id="pos-tr" aria-label="Top right" aria-pressed="false" onclick="setTextPos('tr')">↗</button>
+            <button class="pos-btn border border-border text-muted rounded text-xs py-1.5 hover:border-accent/40 transition-colors" id="pos-ml" aria-label="Middle left" aria-pressed="false" onclick="setTextPos('ml')">←</button>
+            <button class="pos-btn border border-border text-muted rounded text-xs py-1.5 hover:border-accent/40 transition-colors" id="pos-mc" aria-label="Middle center" aria-pressed="false" onclick="setTextPos('mc')">✛</button>
+            <button class="pos-btn border border-border text-muted rounded text-xs py-1.5 hover:border-accent/40 transition-colors" id="pos-mr" aria-label="Middle right" aria-pressed="false" onclick="setTextPos('mr')">→</button>
+            <button class="pos-btn border border-border text-muted rounded text-xs py-1.5 hover:border-accent/40 transition-colors" id="pos-bl" aria-label="Bottom left" aria-pressed="true" onclick="setTextPos('bl')">↙</button>
+            <button class="pos-btn border border-border text-muted rounded text-xs py-1.5 hover:border-accent/40 transition-colors" id="pos-bc" aria-label="Bottom center" aria-pressed="false" onclick="setTextPos('bc')">↓</button>
+            <button class="pos-btn border border-border text-muted rounded text-xs py-1.5 hover:border-accent/40 transition-colors" id="pos-br" aria-label="Bottom right" aria-pressed="false" onclick="setTextPos('br')">↘</button>
+          </div>
+        </div>
+        <div class="flex-1 space-y-2 pt-0.5">
+          <div>
+            <p class="text-xs text-dim mb-1.5">Background</p>
+            <div class="flex items-center gap-2">
+              <input type="color" id="textBgColor" aria-label="Text background color" value="#000000" oninput="liveTextPreview()"
+                class="w-7 h-7 rounded border border-border cursor-pointer p-0.5 flex-shrink-0"
+                style="background:rgba(255,255,255,.04)">
+              <input type="range" id="textBgOpacity" aria-label="Text background opacity" min="0" max="100" value="0"
+                oninput="$('textBgOpVal').textContent=this.value+'%';liveTextPreview()"
+                class="flex-1 accent-accent cursor-pointer">
+              <span id="textBgOpVal" class="text-xs font-mono text-accent w-8">0%</span>
+            </div>
+          </div>
+          <div>
+            <p class="text-xs text-dim mb-1.5">Animation</p>
+            <select id="textAnim" aria-label="Text animation" onchange="liveTextPreview()"
+              class="w-full rounded-lg px-2 py-1.5 text-xs text-text outline-none border border-border cursor-pointer"
+              style="background:rgba(255,255,255,.04)">
+              <option value="fade">Fade in/out</option>
+              <option value="slide-up">Slide up</option>
+              <option value="pop">Pop</option>
+              <option value="none">None</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3" style="border-top:1px solid rgba(255,255,255,.07)">
+        <p class="text-[11px] text-muted font-medium tracking-wide mb-3">Timing</p>
+        <div class="grid grid-cols-2 gap-x-5 gap-y-2.5">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-dim flex-shrink-0" style="width:52px">Start</span>
+            <input type="number" id="textStartTime" aria-label="Text start time" min="0" step="0.1" value="0"
+              class="flex-1 rounded-lg px-2 py-1.5 text-xs text-text font-mono outline-none min-w-0 border border-border"
+              style="background:rgba(255,255,255,.04)">
+            <span class="text-xs text-dim flex-shrink-0">s</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-dim flex-shrink-0" style="width:52px">Duration</span>
+            <input type="range" id="textDuration" aria-label="Text duration" min="1" max="30" value="4"
+              oninput="$('textDurVal').textContent=this.value+'s';liveTextPreview()"
+              class="flex-1 accent-accent cursor-pointer min-w-0">
+            <span id="textDurVal" class="text-xs font-mono text-accent flex-shrink-0 w-6">4s</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-dim flex-shrink-0" style="width:52px">Fade in</span>
+            <input type="range" id="textFadeIn" aria-label="Text fade in duration" min="0" max="3" step="0.1" value="0.3"
+              oninput="$('textFiVal').textContent=this.value+'s';liveTextPreview()"
+              class="flex-1 accent-accent cursor-pointer min-w-0">
+            <span id="textFiVal" class="text-xs font-mono text-accent flex-shrink-0 w-8">0.3s</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-dim flex-shrink-0" style="width:52px">Fade out</span>
+            <input type="range" id="textFadeOut" aria-label="Text fade out duration" min="0" max="3" step="0.1" value="0.3"
+              oninput="$('textFoVal').textContent=this.value+'s';liveTextPreview()"
+              class="flex-1 accent-accent cursor-pointer min-w-0">
+            <span id="textFoVal" class="text-xs font-mono text-accent flex-shrink-0 w-8">0.3s</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live preview -->
+      <div class="rounded-xl overflow-hidden relative" style="background:#070910;height:80px;border:1px solid rgba(255,255,255,.07)">
+        <span id="textMotionPreviewLabel" class="absolute text-[9px] font-medium" style="top:6px;right:8px;z-index:2;color:rgba(255,255,255,.55)">Fade motion · 4.0s timeline</span>
+        <div id="textPreviewWrap" class="absolute inset-0 flex" style="align-items:flex-end;justify-content:center;padding:10px">
+          <div id="textPreviewEl"
+            style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:11px;font-weight:700;color:#fff;
+                   text-align:center;max-width:90%;word-break:break-word;
+                   text-shadow:0 2px 10px rgba(0,0,0,1)">
+            Your text here
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="px-5 pb-5 pt-2 flex gap-2 sticky bottom-0 z-10"
+         style="border-top:1px solid rgba(255,255,255,.07);background:rgba(13,17,24,.95);backdrop-filter:blur(16px)">
+      <button onclick="closeTextModal()" class="flex-1 py-2.5 rounded-xl btn-ghost text-dim text-sm hover:text-text transition-all">Cancel</button>
+      <button onclick="confirmText()"    class="flex-1 py-2.5 rounded-xl btn-cta text-sm">Add overlay →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     ANNOTATION TOOLBAR (shows during recording on ⌘⇧A)
+═══════════════════════════════════════════════════ -->
+<div id="annotationToolbar" style="
+  display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  background:rgba(8,11,20,.95);border:1px solid rgba(255,255,255,.15);
+  border-radius:999px;padding:6px 12px;display:none;align-items:center;gap:8px;
+  z-index:9999;backdrop-filter:blur(20px);box-shadow:0 4px 24px rgba(0,0,0,.5)">
+  <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,.3);letter-spacing:.08em">ANNOTATE</span>
+  <div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div>
+  <button onclick="setAnnotationTool('pen')"    title="Pen" style="width:28px;height:28px;border-radius:8px;border:none;background:rgba(255,255,255,.08);color:#dce8f8;font-size:14px;cursor:pointer">✏</button>
+  <button onclick="setAnnotationTool('arrow')"  title="Arrow" style="width:28px;height:28px;border-radius:8px;border:none;background:rgba(255,255,255,.08);color:#dce8f8;font-size:14px;cursor:pointer">→</button>
+  <button onclick="setAnnotationTool('rect')"   title="Rectangle" style="width:28px;height:28px;border-radius:8px;border:none;background:rgba(255,255,255,.08);color:#dce8f8;font-size:14px;cursor:pointer">▭</button>
+  <button onclick="setAnnotationTool('circle')" title="Circle" style="width:28px;height:28px;border-radius:8px;border:none;background:rgba(255,255,255,.08);color:#dce8f8;font-size:14px;cursor:pointer">◯</button>
+  <button onclick="setAnnotationTool('laser')"  title="Laser pointer" style="width:28px;height:28px;border-radius:8px;border:none;background:rgba(248,113,113,.15);color:#fca5a5;font-size:14px;cursor:pointer">⦿</button>
+  <button onclick="setAnnotationTool('eraser')" title="Eraser" style="width:28px;height:28px;border-radius:8px;border:none;background:rgba(255,255,255,.08);color:#dce8f8;font-size:14px;cursor:pointer">⌫</button>
+  <div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div>
+  <input type="color" value="#f87171" onchange="setAnnotationColor(this.value)" style="width:24px;height:24px;border:none;border-radius:6px;cursor:pointer;padding:0;background:none" title="Color">
+  <input type="range" min="1" max="20" value="4" oninput="setAnnotationSize(this.value)" style="width:60px;accent-color:#6ee7b7" title="Brush size">
+  <div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div>
+  <button onclick="clearAnnotations()" style="width:28px;height:28px;border-radius:8px;border:none;background:rgba(248,113,113,.1);color:#fca5a5;font-size:12px;cursor:pointer" title="Clear all">✕</button>
+  <button id="annotateBtn" onclick="toggleAnnotationMode()" style="
+    padding:4px 12px;border-radius:999px;border:none;font-size:11px;font-weight:700;
+    background:rgba(248,113,113,.2);color:#fca5a5;cursor:pointer">Off</button>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     SHORTCUTS HELP MODAL
+═══════════════════════════════════════════════════ -->
+<div id="shortcutsModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-labelledby="shortcutsDialogTitle">
+  <div style="background:#0d111c;border:1px solid rgba(255,255,255,.1);border-radius:16px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto">
+    <div style="padding:20px 24px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between">
+      <h2 id="shortcutsDialogTitle" style="font-size:16px;font-weight:700;color:#dce8f8">Keyboard Shortcuts</h2>
+      <button onclick="hideShortcutsHelp()" aria-label="Close keyboard shortcuts" style="width:28px;height:28px;border-radius:50%;border:none;background:rgba(255,255,255,.07);color:rgba(255,255,255,.5);font-size:16px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:20px 24px;display:flex;flex-direction:column;gap:20px">
+      <!-- Global -->
+      <div>
+        <p style="font-size:11px;font-weight:700;color:rgba(255,255,255,.35);letter-spacing:.1em;margin-bottom:10px">GLOBAL</p>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;align-items:center;font-size:12px">
+          <kbd style="font-family:monospace;background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px;color:#dce8f8">⌘⇧S</kbd><span style="color:rgba(255,255,255,.5)">Stop recording</span>
+          <kbd style="font-family:monospace;background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px;color:#dce8f8">⌘⇧P</kbd><span style="color:rgba(255,255,255,.5)">Pause / Resume</span>
+          <kbd style="font-family:monospace;background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px;color:#dce8f8">⌘⇧M</kbd><span style="color:rgba(255,255,255,.5)">Add marker</span>
+          <kbd style="font-family:monospace;background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px;color:#dce8f8">⌘⇧G</kbd><span style="color:rgba(255,255,255,.5)">Screenshot</span>
+        </div>
+      </div>
+      <!-- Editor -->
+      <div>
+        <p style="font-size:11px;font-weight:700;color:rgba(255,255,255,.35);letter-spacing:.1em;margin-bottom:10px">EDITOR</p>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;align-items:center;font-size:12px">
+          <kbd style="font-family:monospace;background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px;color:#dce8f8">Space / K</kbd><span style="color:rgba(255,255,255,.5)">Play / Pause</span>
+          <kbd style="font-family:monospace;background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px;color:#dce8f8">J / L</kbd><span style="color:rgba(255,255,255,.5)">−10s / +10s</span>
+          <kbd style="font-family:monospace;background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px;color:#dce8f8">← / →</kbd><span style="color:rgba(255,255,255,.5)">Seek ±5s</span>
+          <kbd style="font-family:monospace;background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px;color:#dce8f8">⇧← / ⇧→</kbd><span style="color:rgba(255,255,255,.5)">Step one frame</span>
+          <kbd style="font-family:monospace;background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px;color:#dce8f8">I</kbd><span style="color:rgba(255,255,255,.5)">Set in-point</span>
+          <kbd style="font-family:monospace;background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px;color:#dce8f8">O</kbd><span style="color:rgba(255,255,255,.5)">Set out-point</span>
+          <kbd style="font-family:monospace;background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px;color:#dce8f8">C</kbd><span style="color:rgba(255,255,255,.5)">Cut at playhead (razor)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="safe-render.js"></script>
+<script src="source-discovery.js"></script>
+<script src="text-style.js"></script>
+<script src="presentation-engine.js"></script>
+<script src="cursor-engine.js"></script>
+<script src="creator-engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

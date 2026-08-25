@@ -1,0 +1,76 @@
+{
+  "name": "screenforge",
+  "version": "1.0.30",
+  "description": "Creator-grade screen recorder with intelligent zoom, click, and shortcut overlays",
+  "author": "Side By Tech LLC",
+  "main": "main.js",
+  "scripts": {
+    "build:css": "tailwindcss -c tailwind.config.js -i renderer/tailwind-input.css -o renderer/tailwind.css --minify",
+    "prestart": "npm run build:css",
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "prepack": "npm run build:css",
+    "pack": "electron-builder --mac --dir",
+    "predist": "npm run build:css",
+    "dist": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "dev.sidebytech.screenforge",
+    "productName": "ScreenForge",
+    "mac": {
+      "category": "public.app-category.video",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSAudioCaptureUsageDescription": "ScreenForge records system audio when System Audio is enabled.",
+        "NSCameraUsageDescription": "ScreenForge records your camera when Camera is enabled.",
+        "NSMicrophoneUsageDescription": "ScreenForge records microphone audio when Microphone is enabled.",
+        "NSScreenCaptureUsageDescription": "ScreenForge needs Screen Recording access to capture displays and application windows."
+      },
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns"
+    },
+    "dmg": {
+      "sign": true
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "preload-floatbar.js",
+      "preload-area-picker.js",
+      "export-engine.js",
+      "export-runtime.js",
+      "media-transforms.js",
+      "security-utils.js",
+      "renderer/**/*",
+      "node_modules/**/*",
+      "!node_modules/electron-builder/**"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ]
+  },
+  "dependencies": {
+    "electron-log": "^5.4.4",
+    "electron-store": "^11.0.2",
+    "ffmpeg-static": "^5.2.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "sharp": "^0.35.3",
+    "systeminformation": "^5.33.1",
+    "uiohook-napi": "^1.5.5",
+    "uuid": "^14.0.0",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "electron": "^43.4.1",
+    "electron-builder": "^26.8.1",
+    "tailwindcss": "^3.4.17"
+  }
+}
