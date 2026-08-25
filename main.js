@@ -834,8 +834,84 @@ function isBlankNativeImage(image) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Global input capture (uiohook) - RECORDING-GATED.
+//
+// uiohook taps every keystroke and mouse click on the entire machine, not just
+// inside ScreenForge. Running it for the app's whole lifetime means that merely
+// having ScreenForge open logs passwords typed into other applications. The hook
+// therefore only runs between 'recording-started' and 'recording-stopped'.
+//
+// Listeners are bound exactly once; only start/stop is toggled, because
+// uIOhook.on() stacks duplicate handlers if called again.
+// ---------------------------------------------------------------------------
+let inputHookListenersBound = false;
+let inputHookRunning = false;
+
+function bindInputHookListeners() {
+  if (!uIOhook || inputHookListenersBound) return;
+  try {
+    uIOhook.on('mousedown', e => {
+      if (!inputHookRunning) return;
+      const point = screen.getCursorScreenPoint();
+      const payload = {
+        x: point.x, y: point.y,
+        button: e.button,
+        bounds: activeSourceBounds,
+        at: Date.now(),
+      };
+      safeSend(mainWindow, 'mouse-down', payload);
+      safeSend(floatBar, 'mouse-down', payload);
+    });
+    uIOhook.on('keydown', e => {
+      if (!inputHookRunning) return;
+      const payload = {
+        keycode: e.keycode,
+        altKey: !!e.altKey,
+        ctrlKey: !!e.ctrlKey,
+        metaKey: !!e.metaKey,
+        shiftKey: !!e.shiftKey,
+        at: Date.now(),
+      };
+      safeSend(mainWindow, 'key-down', payload);
+      safeSend(floatBar, 'key-down', payload);
+    });
+    inputHookListenersBound = true;
+  } catch {
+    uIOhook = null;
+  }
+}
+
+function startInputHook() {
+  if (!uIOhook || inputHookRunning) return;
+  bindInputHookListeners();
+  if (!uIOhook) return;
+  try {
+    uIOhook.start();
+    inputHookRunning = true;
+    log.info('ScreenForge input capture started (recording)');
+  } catch (err) {
+    inputHookRunning = false;
+    log.warn?.(`ScreenForge could not start input capture: ${err.message}`);
+  }
+}
+
+function stopInputHook() {
+  if (!uIOhook) return;
+  inputHookRunning = false;
+  try {
+    uIOhook.stop();
+    log.info('ScreenForge input capture stopped');
+  } catch {}
+}
+
+function inputHookIsRunning() {
+  return inputHookRunning;
+}
+
 // Hide main window + show floating bar when recording starts
 onFrom('main', 'recording-started', (_, info = {}) => {
+  startInputHook();
   safeWindowAction(mainWindow, 'hide');
   showFloatBar(info);
   broadcastWsState({ isRec: true, isPaused: false, elapsed: 0, sessionId: info.sessionId || null });
@@ -844,6 +920,7 @@ onFrom('main', 'recording-started', (_, info = {}) => {
 
 // Show main window + close floating bar when recording stops
 onFrom('main', 'recording-stopped', () => {
+  stopInputHook();
   safeWindowAction(floatBar, 'close');
   floatBar = null;
   safeWindowAction(mainWindow, 'show');
@@ -2224,34 +2301,7 @@ app.whenReady().then(() => {
     try { store?.set('windowBounds', mainWindow.getBounds()); } catch {}
   });
 
-  if (uIOhook) {
-    try {
-      uIOhook.on('mousedown', e => {
-        const point = screen.getCursorScreenPoint();
-        const payload = {
-          x: point.x, y: point.y,
-          button: e.button,
-          bounds: activeSourceBounds,
-          at: Date.now(),
-        };
-        safeSend(mainWindow, 'mouse-down', payload);
-        safeSend(floatBar, 'mouse-down', payload);
-      });
-      uIOhook.on('keydown', e => {
-        const payload = {
-          keycode: e.keycode,
-          altKey: !!e.altKey,
-          ctrlKey: !!e.ctrlKey,
-          metaKey: !!e.metaKey,
-          shiftKey: !!e.shiftKey,
-          at: Date.now(),
-        };
-        safeSend(mainWindow, 'key-down', payload);
-        safeSend(floatBar, 'key-down', payload);
-      });
-      uIOhook.start();
-    } catch { uIOhook = null; }
-  }
+  bindInputHookListeners();
 
   globalShortcut.register('CommandOrControl+Shift+S', () => {
     safeSend(mainWindow, 'global-stop');
@@ -2273,6 +2323,6 @@ app.on('will-quit', () => {
   }
   activeNativeMicSessions.clear();
   globalShortcut.unregisterAll();
-  try { uIOhook?.stop(); } catch {}
+  stopInputHook();
 });
 app.on('window-all-closed', () => app.quit());
