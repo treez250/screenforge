@@ -3251,7 +3251,7 @@ function syncRemovedRanges({ redraw = true } = {}) {
   });
   const droppedZooms = enforceZoomSegmentBudget();
   if (droppedZooms > 0) {
-    showFloatToast(`${droppedZooms} camera shot${droppedZooms === 1 ? '' : 's'} removed to keep the 80-segment export limit`);
+    showFloatToast(`${droppedZooms} camera shot${droppedZooms === 1 ? '' : 's'} inactive - over the 80-segment export limit`);
   }
   renderRemovalSummary();
   if (redraw) {
@@ -3261,22 +3261,61 @@ function syncRemovedRanges({ redraw = true } = {}) {
   }
 }
 
-function enforceZoomSegmentBudget() {
+// ─── Zoom segment budget ─────────────────────────────────────────────────────
+//
+// Export can carry a bounded number of camera segments (MAX_ZOOM_SHOTS), proven
+// safe at exactly 80 by the real-ffmpeg spawn in
+// test/renderer-export-contract.test.js.
+//
+// This used to DELETE over-budget zoom keyframes from S.keyframes. That was the
+// single worst source of "the app is flaky": a zoom's cost is the number of
+// export segments it spans, which depends on cuts and removed ranges, so
+// trimming something unrelated could retroactively destroy zooms the user had
+// already placed - silently, on one of the call sites. Same project, different
+// result, work gone with no undo.
+//
+// Now nothing is ever deleted. Over-budget zooms are marked and simply do not
+// render or export, and they come back on their own the moment the user frees up
+// budget by removing a cut or an earlier zoom.
+
+function computeZoomBudget() {
   const zooms = S.keyframes
     .filter(keyframe => keyframe.type === 'zoom')
     .sort((left, right) => left.time - right.time || left.id - right.id);
-  const acceptedIds = new Set();
+  const activeIds = new Set();
+  const overBudgetIds = new Set();
   let segmentsUsed = 0;
   for (const zoom of zooms) {
     const duration = Math.max(0.05, Number(zoom.duration) || 1.55);
     const segmentCost = mapExportSegments(zoom.time, zoom.time + duration).length;
-    if (segmentsUsed + segmentCost > MAX_ZOOM_SHOTS) continue;
+    if (segmentsUsed + segmentCost > MAX_ZOOM_SHOTS) {
+      overBudgetIds.add(zoom.id);
+      continue;
+    }
     segmentsUsed += segmentCost;
-    acceptedIds.add(zoom.id);
+    activeIds.add(zoom.id);
   }
-  const before = zooms.length;
-  S.keyframes = S.keyframes.filter(keyframe => keyframe.type !== 'zoom' || acceptedIds.has(keyframe.id));
-  return before - acceptedIds.size;
+  return { activeIds, overBudgetIds, segmentsUsed, total: zooms.length };
+}
+
+// CANON: the single source of truth for which zooms render and export.
+// No render path may re-filter zooms itself.
+function activeZoomKeyframes() {
+  const { activeIds } = computeZoomBudget();
+  return S.keyframes.filter(keyframe => keyframe.type === 'zoom' && activeIds.has(keyframe.id));
+}
+
+// Marks over-budget zooms in place and returns how many are currently inactive.
+// Name retained because test/renderer-export-contract.test.js references it
+// inside a vm.runInContext string.
+function enforceZoomSegmentBudget() {
+  const { overBudgetIds } = computeZoomBudget();
+  for (const keyframe of S.keyframes) {
+    if (keyframe.type !== 'zoom') continue;
+    if (overBudgetIds.has(keyframe.id)) keyframe.overBudget = true;
+    else delete keyframe.overBudget;
+  }
+  return overBudgetIds.size;
 }
 
 function removeTimelineRange(start, end, source = 'manual') {
@@ -3628,7 +3667,7 @@ function commitTrimCameraBudget() {
   if (droppedZooms <= 0) return 0;
   drawKfLayer();
   renderKfLists();
-  showFloatToast(`${droppedZooms} camera shot${droppedZooms === 1 ? '' : 's'} removed to keep the ${MAX_ZOOM_SHOTS}-segment export limit`);
+  showFloatToast(`${droppedZooms} camera shot${droppedZooms === 1 ? '' : 's'} inactive - over the ${MAX_ZOOM_SHOTS}-segment export limit`);
   return droppedZooms;
 }
 
@@ -3989,7 +4028,13 @@ function generateActionDirector() {
   const directed = generatedShots.slice(0, availableShots);
 
   S.keyframes = [...keep, ...directed].sort((a, b) => a.time - b.time);
-  enforceZoomSegmentBudget();
+  const overBudget = enforceZoomSegmentBudget();
+  if (overBudget > 0) {
+    // Previously this call site swallowed the result, so director-generated
+    // shots vanished with no explanation. Nothing is deleted now, but the user
+    // still needs to know some shots are inactive.
+    showFloatToast(`${overBudget} camera shot${overBudget === 1 ? '' : 's'} inactive - over the ${MAX_ZOOM_SHOTS}-segment export limit`);
+  }
   const keptDirected = S.keyframes.filter(k => k.type === 'zoom' && k.source === 'action-director');
   drawKfLayer();
   renderKfLists();
@@ -4457,8 +4502,9 @@ function renderKfLists() {
 let _overlayEls = {};
 
 function zoomStateAt(time) {
+  // Reads the marker rather than recomputing the budget: this runs per frame.
   const active = S.keyframes
-    .filter(k => k.type === 'zoom' && time >= k.time && time <= k.time + (Number(k.duration) || 0))
+    .filter(k => k.type === 'zoom' && !k.overBudget && time >= k.time && time <= k.time + (Number(k.duration) || 0))
     .sort((a, b) => a.time - b.time)
     .at(-1);
   if (!active) return { scale: 1, xPct: 0.5, yPct: 0.5 };
@@ -4928,7 +4974,7 @@ async function runExport() {
   if (droppedZooms > 0) {
     drawKfLayer();
     renderKfLists();
-    showFloatToast(`${droppedZooms} camera shot${droppedZooms === 1 ? '' : 's'} removed to keep export reliable`);
+    showFloatToast(`${droppedZooms} camera shot${droppedZooms === 1 ? '' : 's'} inactive - over the export segment limit`);
   }
   const filterBundle = buildFilters(resVal, hasPad);
   const audioFilters = buildAudioFilters();
@@ -4998,8 +5044,10 @@ function buildFilters(resVal, hasPad) {
   const presentation = buildPresentationOptions(resVal, hasPad);
   sourceParts.push(...colorAdjustmentExportFilters());
 
-  const zooms = S.keyframes
-    .filter(k => k.type === 'zoom')
+  // activeZoomKeyframes() is the canonical selector: it recomputes the segment
+  // budget against the current cuts, so export always agrees with the preview.
+  // The slice stays as a belt-and-braces guard on segment count.
+  const zooms = activeZoomKeyframes()
     .sort((a, b) => a.time - b.time)
     .slice(0, MAX_ZOOM_SHOTS)
     .flatMap(k => {

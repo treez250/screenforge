@@ -41,7 +41,7 @@ function loadRendererExportContract() {
   context.$ = () => null;
   vm.createContext(context);
   const source = rendererSource
-    + '\n;globalThis.__contract = { S, buildFilters, normalizeEditorKeyframes, enforceZoomSegmentBudget, selectedRecordingOutputSize, MAX_ZOOM_SHOTS };';
+    + '\n;globalThis.__contract = { S, buildFilters, normalizeEditorKeyframes, enforceZoomSegmentBudget, activeZoomKeyframes, computeZoomBudget, selectedRecordingOutputSize, MAX_ZOOM_SHOTS };';
   vm.runInContext(source, context, { filename: 'renderer/app.js' });
   return context.__contract;
 }
@@ -75,12 +75,55 @@ test('cut-split camera moves share the same 80-segment preview and export budget
     keyframes,
     removedRanges,
   });
+  // 10 of the 50 zooms exceed the segment budget once the cuts are applied.
   assert.equal(contract.enforceZoomSegmentBudget(), 10);
-  assert.equal(contract.S.keyframes.filter(keyframe => keyframe.type === 'zoom').length, 40);
+
+  // The budget must NEVER destroy user keyframes. All 50 survive in state;
+  // the over-budget ones are marked inactive and simply do not render or export,
+  // and become active again if the user removes a cut or an earlier zoom.
+  const zoomKeyframes = contract.S.keyframes.filter(keyframe => keyframe.type === 'zoom');
+  assert.equal(zoomKeyframes.length, 50, 'zoom keyframes must be preserved, not deleted');
+  assert.equal(zoomKeyframes.filter(keyframe => keyframe.overBudget).length, 10);
+  assert.equal(contract.activeZoomKeyframes().length, 40);
+
   const bundle = contract.buildFilters('source', false);
   const segmentCount = (bundle.cameraFilters.match(/between\(t\\,/g) || []).length / 4;
   assert.equal(segmentCount, 80);
   assert.equal(validateRendererFilterChain(bundle.cameraFilters, 'camera'), true);
+});
+
+test('over-budget camera moves recover when the user frees up budget', () => {
+  const contract = loadRendererExportContract();
+  const keyframes = Array.from({ length: 50 }, (_, index) => ({
+    id: index + 1,
+    type: 'zoom',
+    time: index * 3,
+    duration: 2,
+    zoomLevel: 1.8,
+    xPct: 0.5,
+    yPct: 0.5,
+  }));
+  // Each cut splits a zoom in two, doubling its segment cost and pushing the
+  // tail of the timeline over budget.
+  const removedRanges = keyframes.map(keyframe => ({
+    start: keyframe.time + 1,
+    end: keyframe.time + 1.2,
+  }));
+
+  configureProject(contract, { dur: 160, trimOut: 160, keyframes, removedRanges });
+  assert.equal(contract.enforceZoomSegmentBudget(), 10, 'expected 10 inactive while cut');
+  assert.equal(contract.activeZoomKeyframes().length, 40);
+
+  // Remove the cuts. Every zoom now costs one segment again, so all 50 fit -
+  // and because nothing was ever deleted, they all come back on their own.
+  configureProject(contract, { dur: 160, trimOut: 160, keyframes, removedRanges: [] });
+  assert.equal(contract.enforceZoomSegmentBudget(), 0, 'nothing should be over budget once cuts are gone');
+  assert.equal(contract.activeZoomKeyframes().length, 50, 'all camera moves must return');
+  assert.equal(
+    contract.S.keyframes.filter(keyframe => keyframe.type === 'zoom' && keyframe.overBudget).length,
+    0,
+    'no keyframe should remain flagged',
+  );
 });
 
 test('recorder setup preview uses the shared presentation geometry and selected blur', () => {
