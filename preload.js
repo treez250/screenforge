@@ -87,6 +87,10 @@ contextBridge.exposeInMainWorld('sf', {
   getRemoteUrl:         ()     => ipcRenderer.invoke('get-remote-url'),
 
   // ─── IPC listeners (main → renderer) ─────────────────────────────────────
+  // Out-of-band fault channel. IPC calls still reject on failure; this carries
+  // faults that belong to no particular call (uncaught exceptions, dead child
+  // processes) so the UI can tell the user instead of silently misbehaving.
+  onMainError:          (cb)   => ipcRenderer.on('main-error',        (_, d) => cb(d)),
   onCursorMove:         (cb)   => ipcRenderer.on('cursor-move',       (_, d) => cb(d)),
   onMouseDown:          (cb)   => ipcRenderer.on('mouse-down',        (_, d) => cb(d)),
   onKeyDown:            (cb)   => ipcRenderer.on('key-down',          (_, d) => cb(d)),

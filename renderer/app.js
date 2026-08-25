@@ -447,7 +447,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     screenforgeApi.onCursorMove(d         => ingestCursor(d));
     screenforgeApi.onMouseDown(d          => ingestClick(d));
     screenforgeApi.onKeyDown(d            => ingestKey(d));
+    screenforgeApi.onMainError?.(d        => reportMainFault(d));
   }
+
+  installRendererFaultHooks();
 
   const vid = $('videoPreview');
   vid.addEventListener('loadedmetadata', onVideoLoaded);
@@ -2904,6 +2907,42 @@ async function takeScreenshotDuringRecording() {
       showFloatToast('Screenshot saved');
     }
   } catch {}
+}
+
+// ─── Fault reporting ─────────────────────────────────────────────────────────
+//
+// Renderer-side failures used to vanish into the console, which is invisible in
+// a packaged build. Anything that throws now tells the user something went
+// wrong, so a broken action reads as an error rather than as the app "being
+// flaky". Messages are deduplicated because a failing render loop can throw
+// every frame.
+
+let lastFaultMessage = '';
+let lastFaultAt = 0;
+
+function announceFault(prefix, message) {
+  const text = `${prefix}: ${message || 'unknown error'}`;
+  const now = Date.now();
+  if (text === lastFaultMessage && now - lastFaultAt < 5000) return;
+  lastFaultMessage = text;
+  lastFaultAt = now;
+  try { showFloatToast(text); } catch {}
+  try { console.error('[ScreenForge]', text); } catch {}
+}
+
+function reportMainFault(detail) {
+  if (!detail) return;
+  announceFault(detail.fatal ? 'ScreenForge hit a fatal error' : 'ScreenForge error', detail.message);
+}
+
+function installRendererFaultHooks() {
+  window.addEventListener('error', (event) => {
+    announceFault('Something went wrong', event?.error?.message || event?.message);
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event?.reason;
+    announceFault('Something went wrong', reason instanceof Error ? reason.message : String(reason ?? ''));
+  });
 }
 
 function showFloatToast(msg) {

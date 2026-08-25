@@ -59,9 +59,20 @@ function assertIpcSender(event, role) {
 }
 
 function handleFrom(role, channel, handler) {
-  ipcMain.handle(channel, (event, ...args) => {
+  ipcMain.handle(channel, async (event, ...args) => {
+    // Sender check stays first and outside the try: an unauthorized caller must
+    // never reach the handler, and must not be reported as a runtime fault.
     assertIpcSender(event, role);
-    return handler(event, ...args);
+    try {
+      return await handler(event, ...args);
+    } catch (err) {
+      // Log and surface, then re-throw. Reject semantics are deliberate: every
+      // `await screenforgeApi.x()` call site in the renderer catches, and
+      // resolving with an error object instead would let success paths run on
+      // failure data.
+      reportRuntimeFault(`ipc:${channel}`, err);
+      throw err;
+    }
   });
 }
 
@@ -284,6 +295,81 @@ try { ({ WebSocketServer } = require('ws'));    }          catch {}
 try { sharp         = require('sharp');         }          catch {}
 
 const log = electronLog || console;
+
+// ─── Crash guards ─────────────────────────────────────────────────────────────
+//
+// Without these, an unhandled rejection in any of the ~44 async IPC handlers, or
+// a renderer/child-process death, kills or zombies the app with no log line and
+// no message to the user. That is the single largest source of "it just gets
+// flaky" reports: the failure is invisible, so it looks random.
+//
+// Every fault is logged, surfaced to the renderer out-of-band on 'main-error',
+// and - for fatal paths - followed by best-effort cleanup of in-flight FFmpeg
+// children and temp files so a crash does not leak processes or disk.
+
+let runtimeFaultCount = 0;
+
+function describeFault(err) {
+  if (err instanceof Error) return err.stack || err.message;
+  try { return JSON.stringify(err); } catch { return String(err); }
+}
+
+function reportRuntimeFault(origin, err, { fatal = false } = {}) {
+  runtimeFaultCount += 1;
+  const detail = describeFault(err);
+  log.error?.(`ScreenForge fault [${origin}]${fatal ? ' (fatal)' : ''}: ${detail}`);
+  try {
+    safeSend(mainWindow, 'main-error', {
+      origin,
+      fatal,
+      message: err instanceof Error ? err.message : String(err),
+      at: Date.now(),
+    });
+  } catch {}
+}
+
+// Best-effort teardown of anything that would outlive a crash.
+function reapChildProcesses(reason) {
+  try {
+    for (const [, rec] of activeNativeMicSessions) {
+      try { rec.proc?.kill('SIGKILL'); } catch {}
+    }
+    activeNativeMicSessions.clear();
+  } catch {}
+  try { stopInputHook(); } catch {}
+  log.warn?.(`ScreenForge reaped child processes after ${reason}`);
+}
+
+function installCrashGuards() {
+  // Only meaningful in the main process. main-startup.test.js evaluates this
+  // file in a vm that shares the real `process`, where `process.type` is
+  // undefined, so the guards correctly no-op under test.
+  if (process.type !== 'browser') return;
+
+  process.on('uncaughtException', (err) => {
+    reportRuntimeFault('uncaughtException', err, { fatal: true });
+    reapChildProcesses('uncaughtException');
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    reportRuntimeFault('unhandledRejection', reason);
+  });
+
+  app.on('render-process-gone', (_event, _contents, details) => {
+    reportRuntimeFault('render-process-gone', new Error(
+      `renderer exited: ${details?.reason || 'unknown'} (exitCode ${details?.exitCode ?? 'n/a'})`,
+    ), { fatal: true });
+    reapChildProcesses('render-process-gone');
+  });
+
+  app.on('child-process-gone', (_event, details) => {
+    reportRuntimeFault('child-process-gone', new Error(
+      `${details?.type || 'child'} exited: ${details?.reason || 'unknown'}`,
+    ));
+  });
+}
+
+installCrashGuards();
 
 // ─── Persistent settings ──────────────────────────────────────────────────────
 const store = Store ? new Store({ name: 'screenforge-prefs' }) : null;
