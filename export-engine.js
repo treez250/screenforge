@@ -87,7 +87,9 @@ function buildExportPlan(options = {}) {
       + `x=iw*${numberToken(zone.x)}:`
       + `y=ih*${numberToken(zone.y)},`
       + `boxblur=luma_radius='${blurRadius}':luma_power=1:`
-      + `chroma_radius='${chromaRadius}':chroma_power=1[${blurredLabel}]`
+      + `chroma_radius='${chromaRadius}':chroma_power=1`
+      + circleMaskFilters(zone.shape)
+      + `[${blurredLabel}]`
     );
 
     const enable = zone.enable ? `:enable='${zone.enable}'` : '';
@@ -500,6 +502,9 @@ function normalizeRemovedRanges(rawRanges, trim) {
   return merged;
 }
 
+// Only these shapes may reach the filtergraph. Anything else falls back to rect.
+const BLUR_ZONE_SHAPES = new Set(['rect', 'square', 'circle']);
+
 function normalizeBlurZones(rawZones, trim, removedRanges) {
   if (!Array.isArray(rawZones)) return [];
   const zones = [];
@@ -511,6 +516,7 @@ function normalizeBlurZones(rawZones, trim, removedRanges) {
     const width = Math.min(finiteNumber(rawZone.wPct, 0.3, 0.001, 1), 1 - x);
     const height = Math.min(finiteNumber(rawZone.hPct, 0.2, 0.001, 1), 1 - y);
     const radius = Math.round(finiteNumber(rawZone.radius, 20, 1, 100));
+    const shape = BLUR_ZONE_SHAPES.has(rawZone.shape) ? rawZone.shape : 'rect';
     const timedRange = normalizeMappedRange(rawZone, trim, removedRanges);
     if (timedRange && timedRange.empty) continue;
 
@@ -520,10 +526,22 @@ function normalizeBlurZones(rawZones, trim, removedRanges) {
       width: roundedNumber(Math.max(0.001, width)),
       height: roundedNumber(Math.max(0.001, height)),
       radius,
+      shape,
       enable: timedRange ? timedRange.enable : '',
     });
   }
   return zones;
+}
+
+// A circular blur needs an alpha mask: crop gives us a rectangle, so we punch an
+// ellipse into its alpha channel and let overlay composite it. Inscribed in the
+// cropped box, which the editor keeps square, so it renders as a true circle.
+// All commas inside expressions must be escaped for filtergraph parsing.
+function circleMaskFilters(shape) {
+  if (shape !== 'circle') return '';
+  const inside = 'lte(pow((X-W/2)/(W/2)\\,2)+pow((Y-H/2)/(H/2)\\,2)\\,1)';
+  return ',format=yuva420p'
+    + `,geq=lum='p(X\\,Y)':cb='p(X\\,Y)':cr='p(X\\,Y)':a='if(${inside}\\,255\\,0)'`;
 }
 
 function normalizeWatermark(rawWatermark, trim, removedRanges) {

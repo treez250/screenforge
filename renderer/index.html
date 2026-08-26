@@ -465,6 +465,11 @@
   #recCanvas { position:fixed; left:-9999px; top:-9999px; }
 </style>
 <link rel="stylesheet" href="apple.css">
+<style>
+  .blur-shape-btn{color:rgba(255,255,255,.55);background:rgba(139,92,246,.06);border:1px solid rgba(139,92,246,.16);transition:all .15s ease}
+  .blur-shape-btn:hover{background:rgba(139,92,246,.13);color:rgba(255,255,255,.8)}
+  .blur-shape-on{color:#fff;background:rgba(139,92,246,.32);border-color:rgba(167,139,250,.85)}
+</style>
 </head>
 <body class="sf-app">
 
@@ -1492,7 +1497,18 @@
           <!-- Quick blur zone editor -->
           <div class="mt-3 pt-3 space-y-2.5" style="border-top:1px solid rgba(255,255,255,.06)">
             <p class="text-[10px] font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,.22)">Selected zone</p>
-            <p id="blurSelectionHelp" class="text-[10px] leading-relaxed" style="color:rgba(255,255,255,.3)">Select a zone, then drag it directly on the preview. Use the corner handle to resize.</p>
+            <p id="blurSelectionHelp" class="text-[10px] leading-relaxed" style="color:rgba(255,255,255,.3)">Select a zone, then drag it directly on the preview. Use the corner handle to resize, or arrow keys to nudge it into place.</p>
+            <div id="blurShapeControls" class="hidden">
+              <span class="text-[10px] block mb-1" style="color:rgba(255,255,255,.4)">Shape</span>
+              <div class="grid grid-cols-3 gap-1" role="group" aria-label="Privacy blur zone shape">
+                <button id="blurShapeRect" class="nd blur-shape-btn rounded px-2 py-1 text-[10px] font-semibold"
+                        aria-pressed="true" onclick="setSelectedBlurShape('rect')">Rectangle</button>
+                <button id="blurShapeSquare" class="nd blur-shape-btn rounded px-2 py-1 text-[10px] font-semibold"
+                        aria-pressed="false" onclick="setSelectedBlurShape('square')">Square</button>
+                <button id="blurShapeCircle" class="nd blur-shape-btn rounded px-2 py-1 text-[10px] font-semibold"
+                        aria-pressed="false" onclick="setSelectedBlurShape('circle')">Circle</button>
+              </div>
+            </div>
             <div id="blurTimingControls" class="hidden grid grid-cols-2 gap-2">
               <label class="text-[10px]" style="color:rgba(255,255,255,.4)">Start
                 <input id="blurStartInput" type="number" min="0" step="0.1" value="0"

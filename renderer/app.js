@@ -2539,8 +2539,9 @@ function normalizeBlurZones(zones) {
       endTime: Math.max(0.05, Number(raw.endTime) || 3),
       xPct: Number.isFinite(Number(raw.xPct)) ? clamp(Number(raw.xPct), 0, 0.99) : 0.1,
       yPct: Number.isFinite(Number(raw.yPct)) ? clamp(Number(raw.yPct), 0, 0.99) : 0.1,
-      wPct: Number.isFinite(Number(raw.wPct)) ? clamp(Number(raw.wPct), 0.01, 1) : 0.3,
-      hPct: Number.isFinite(Number(raw.hPct)) ? clamp(Number(raw.hPct), 0.01, 1) : 0.2,
+      wPct: Number.isFinite(Number(raw.wPct)) ? clamp(Number(raw.wPct), MIN_BLUR_ZONE_PCT, 1) : 0.16,
+      hPct: Number.isFinite(Number(raw.hPct)) ? clamp(Number(raw.hPct), MIN_BLUR_ZONE_PCT, 1) : 0.07,
+      shape: BLUR_ZONE_SHAPES.includes(raw.shape) ? raw.shape : 'rect',
       radius: clamp(Math.round(Number(raw.radius) || 20), 1, 80),
     };
   }).map(zone => ({
@@ -3004,6 +3005,64 @@ function showFloatToast(msg) {
 // ── Blur zones (privacy redaction) ───────────────────────────────────────────
 
 let _selectedBlurZoneId = null;
+// Smallest a privacy blur zone may be dragged to, as a fraction of the frame.
+// 0.008 is about 15x9px on a 1080p recording: tight enough to sit over a single
+// account number without swallowing the rows around it. The export side already
+// accepted down to 0.001, so this UI clamp was the only thing in the way.
+const MIN_BLUR_ZONE_PCT = 0.008;
+
+const BLUR_ZONE_SHAPES = ['rect', 'square', 'circle'];
+
+function blurZoneShape(zone) {
+  return BLUR_ZONE_SHAPES.includes(zone?.shape) ? zone.shape : 'rect';
+}
+
+// Square and circle must be equal in PIXELS, not in percent. wPct and hPct are
+// fractions of different dimensions, so on a 16:9 frame an equal-percent box is
+// visibly oblong. Height is derived from width via the frame aspect.
+function constrainBlurZoneShape(zone) {
+  const shape = blurZoneShape(zone);
+  if (shape === 'rect') return zone;
+  const frameW = Number(S.videoW) || 16;
+  const frameH = Number(S.videoH) || 9;
+  const aspect = frameW / frameH;
+  zone.hPct = clamp(zone.wPct * aspect, MIN_BLUR_ZONE_PCT, 1 - zone.yPct);
+  // If the derived height hit the bottom edge, walk width back so it stays square.
+  zone.wPct = clamp(zone.hPct / aspect, MIN_BLUR_ZONE_PCT, 1 - zone.xPct);
+  return zone;
+}
+
+function blurZoneRadiusCss(zone) {
+  return blurZoneShape(zone) === 'circle' ? '50%' : '4px';
+}
+
+function syncBlurShapeButtons(active) {
+  for (const shape of BLUR_ZONE_SHAPES) {
+    const button = $(`blurShape${shape.charAt(0).toUpperCase()}${shape.slice(1)}`);
+    if (!button) continue;
+    const on = shape === active;
+    button.setAttribute('aria-pressed', on ? 'true' : 'false');
+    button.classList.toggle('blur-shape-on', on);
+  }
+}
+
+function setSelectedBlurShape(shape) {
+  if (!_selectedBlurZoneId) return;
+  setBlurZoneShape(_selectedBlurZoneId, shape);
+  syncBlurShapeButtons(shape);
+}
+
+function setBlurZoneShape(id, shape) {
+  const zone = S.blurZones.find(item => item.id === id);
+  if (!zone || !BLUR_ZONE_SHAPES.includes(shape)) return;
+  zone.shape = shape;
+  constrainBlurZoneShape(zone);
+  renderBlurZoneList();
+  syncSelectedBlurEditor();
+  renderPrivacyBlurPreview($('videoPreview')?.currentTime || 0);
+  schedulePersist();
+}
+
 let _blurZoneDrag = null;
 
 function addBlurZone() {
@@ -3011,11 +3070,16 @@ function addBlurZone() {
   if (!vid || !S.dur) return;
   const t = vid.currentTime;
   const radius = parseInt($('blurRadiusSlider')?.value || 20);
+  // Sized for the common case: covering one field, like an account number or an
+  // email address. The old default was 30% x 20% of the frame, which is roughly
+  // 576x216px on a 1080p recording - far bigger than anything you actually want
+  // to hide, and it made the feature feel like it only did large areas.
   const zone = {
     id: Date.now(),
     startTime: t,
     endTime: Math.min(t + 5, S.dur),
-    xPct: 0.35, yPct: 0.4, wPct: 0.3, hPct: 0.2,
+    xPct: 0.42, yPct: 0.46, wPct: 0.16, hPct: 0.07,
+    shape: 'rect',
     radius,
   };
   S.blurZones.push(zone);
@@ -3057,7 +3121,9 @@ function syncSelectedBlurEditor() {
       ? 'Drag this zone on the preview. Use the lower-right handle to resize it.'
       : 'Select a zone, then drag it directly on the preview. Use the corner handle to resize.';
   }
+  $('blurShapeControls')?.classList.toggle('hidden', !zone);
   if (!zone) return;
+  syncBlurShapeButtons(blurZoneShape(zone));
   if ($('blurStartInput')) $('blurStartInput').value = Number(zone.startTime).toFixed(1);
   if ($('blurEndInput')) $('blurEndInput').value = Number(zone.endTime).toFixed(1);
   if ($('blurRadiusSlider')) $('blurRadiusSlider').value = String(zone.radius);
@@ -3135,7 +3201,7 @@ function renderPrivacyBlurPreview(time) {
     return `<div role="group" tabindex="0" aria-label="Privacy blur zone from ${fmtTime(zone.startTime)} to ${fmtTime(zone.endTime)}. Use arrow keys to move."
       onkeydown="nudgeBlurZone(event,${zone.id},'move')" onmousedown="startBlurZoneDrag(event,${zone.id},'move')" style="
       position:absolute;left:${left * 100}%;top:${top * 100}%;width:${width * 100}%;height:${height * 100}%;
-      z-index:6;pointer-events:auto;cursor:move;overflow:hidden;
+      z-index:6;pointer-events:auto;cursor:move;overflow:hidden;border-radius:${blurZoneRadiusCss(zone)};
       backdrop-filter:blur(${displayBlurRadius.toFixed(2)}px);-webkit-backdrop-filter:blur(${displayBlurRadius.toFixed(2)}px);
       background:rgba(139,92,246,.05);border:${selected ? '2px solid rgba(167,139,250,.95)' : '1px solid rgba(167,139,250,.45)'};
       box-shadow:${selected ? '0 0 0 1px rgba(0,0,0,.55),0 8px 24px rgba(0,0,0,.24)' : 'none'}">
@@ -3169,8 +3235,8 @@ function nudgeBlurZone(event, id, mode) {
   const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
   const dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
   if (mode === 'resize') {
-    zone.wPct = clamp(zone.wPct + dx, 0.04, 1 - zone.xPct);
-    zone.hPct = clamp(zone.hPct + dy, 0.04, 1 - zone.yPct);
+    zone.wPct = clamp(zone.wPct + dx, MIN_BLUR_ZONE_PCT, 1 - zone.xPct);
+    zone.hPct = clamp(zone.hPct + dy, MIN_BLUR_ZONE_PCT, 1 - zone.yPct);
   } else {
     zone.xPct = clamp(zone.xPct + dx, 0, 1 - zone.wPct);
     zone.yPct = clamp(zone.yPct + dy, 0, 1 - zone.hPct);
@@ -3208,8 +3274,9 @@ function doBlurZoneDrag(event) {
   const dx = (event.clientX - _blurZoneDrag.x) / _blurZoneDrag.rect.width / _blurZoneDrag.zoom.scale;
   const dy = (event.clientY - _blurZoneDrag.y) / _blurZoneDrag.rect.height / _blurZoneDrag.zoom.scale;
   if (_blurZoneDrag.mode === 'resize') {
-    zone.wPct = clamp(_blurZoneDrag.zone.wPct + dx, 0.04, 1 - zone.xPct);
-    zone.hPct = clamp(_blurZoneDrag.zone.hPct + dy, 0.04, 1 - zone.yPct);
+    zone.wPct = clamp(_blurZoneDrag.zone.wPct + dx, MIN_BLUR_ZONE_PCT, 1 - zone.xPct);
+    zone.hPct = clamp(_blurZoneDrag.zone.hPct + dy, MIN_BLUR_ZONE_PCT, 1 - zone.yPct);
+    constrainBlurZoneShape(zone);
   } else {
     zone.xPct = clamp(_blurZoneDrag.zone.xPct + dx, 0, 1 - zone.wPct);
     zone.yPct = clamp(_blurZoneDrag.zone.yPct + dy, 0, 1 - zone.hPct);
