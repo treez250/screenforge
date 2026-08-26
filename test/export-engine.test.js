@@ -41,6 +41,7 @@ test('builds an explicitly mapped trimmed H.264 plan without audio', () => {
   assert.equal(optionValues(plan.args, '-c:v').at(-1), 'libx264');
   assert.equal(plan.args.at(-1), plan.outputPath);
   assert.match(filterGraph(plan), /^\[0:v:0\]setpts=PTS-STARTPTS\[vbase\]/);
+  assert.match(filterGraph(plan), /\[vbase\]fps=30\[vout\]$/);
 });
 
 test('merges, clamps, and removes source-time ranges from video and audio', () => {
@@ -107,7 +108,7 @@ test('quantizes cuts and mapped overlays onto the same deterministic clock', () 
   assert.match(graph, /\[acut0\]\[acut1\]concat=n=2:v=0:a=1\[acutbase\]/);
   assert.match(graph, /enable='between\(t\\,0\.1\\,0\.149999\)'/);
   assert.ok(graph.indexOf(clockShift) < graph.indexOf("drawtext=text='Clock'"));
-  assert.match(graph, /setpts=PTS\/2,fps=source_fps\[vout\]/);
+  assert.match(graph, /setpts=PTS\/2,fps=30\[vout\]/);
   assert.match(
     graph,
     /\[acutbase\]aresample=48000,atempo=2,adelay=640S:all=1,apad,atrim=duration=0\.475,asetpts=PTS-STARTPTS\[aout\]/,
@@ -133,7 +134,10 @@ test('validates declared source frame rates across common production clocks', ()
     });
     assert.equal(plan.sourceFrameRate, item.normalized);
     assert.equal(Number((1 / plan.sourceFrameRate).toFixed(6)), item.frameDuration);
-    assert.match(filterGraph(plan), /\[vbase\]fps=source_fps\[vout\]/);
+    assert.match(
+      filterGraph(plan),
+      new RegExp(`\\[vbase\\]fps=${String(item.normalized).replace('.', '\\.')}\\[vout\\]`),
+    );
     assert.match(filterGraph(plan), /asegment=timestamps=0\.005\|0\.055/);
     assert.match(filterGraph(plan), /\[acutbase\]anull\[aout\]/);
   }
@@ -257,13 +261,13 @@ test('changes video and source-audio speed within the supported export range', (
   });
 
   assert.equal(fast.expectedDuration, 5);
-  assert.match(filterGraph(fast), /setpts=PTS\/4\[vout\]/);
+  assert.match(filterGraph(fast), /setpts=PTS\/4,fps=30\[vout\]/);
   assert.match(
     filterGraph(fast),
     /aresample=48000,atempo=2,atempo=2,adelay=960S:all=1,apad,atrim=duration=5,asetpts=PTS-STARTPTS\[aout\]/,
   );
   assert.equal(slow.expectedDuration, 40);
-  assert.match(filterGraph(slow), /setpts=PTS\/0\.5\[vout\]/);
+  assert.match(filterGraph(slow), /setpts=PTS\/0\.5,fps=30\[vout\]/);
   assert.match(
     filterGraph(slow),
     /aresample=48000,atempo=0\.5,adelay=2560S:all=1,apad,atrim=duration=40,asetpts=PTS-STARTPTS\[aout\]/,

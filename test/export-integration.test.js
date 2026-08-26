@@ -51,6 +51,26 @@ function decodedStreamDuration(filePath, stream) {
   return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
 }
 
+function decodedVideoFrameCount(filePath) {
+  const result = runFfmpeg([
+    '-hide_banner', '-i', filePath,
+    '-map', '0:v:0',
+    '-an', '-f', 'null', '-',
+  ], 'video frame-count probe');
+  const matches = [...result.stderr.matchAll(/frame=\s*(\d+)/g)];
+  assert.ok(matches.length, 'expected a decoded video frame count');
+  return Number(matches.at(-1)[1]);
+}
+
+function removeWebmDefaultDuration(filePath) {
+  const bytes = fs.readFileSync(filePath);
+  const signature = Buffer.from([0x23, 0xe3, 0x83, 0x84]);
+  const index = bytes.indexOf(signature);
+  assert.notEqual(index, -1, 'expected a WebM DefaultDuration element');
+  Buffer.from([0xec, 0x86, 0, 0, 0, 0, 0, 0]).copy(bytes, index);
+  fs.writeFileSync(filePath, bytes);
+}
+
 function firstBrightFrameTime(filePath) {
   const result = runFfmpeg([
     '-hide_banner', '-i', filePath,
@@ -127,6 +147,7 @@ test('encodes the combined creator export graph into synchronized media', { time
       removedRanges: [{ start: 2, end: 3 }],
       hasAudio: true,
       speedMultiplier: 1.25,
+      sourceFrameRate: 60,
       filters: SAFE_COLOR_FILTER,
       sourceOverlays: "drawtext=text='○':expansion=none:fontfile='/System/Library/Fonts/Supplemental/Arial Bold.ttf':fontsize=28:fontcolor=0x5eead4DD:x='w*0.25-text_w/2':y='h*0.25-text_h/2':enable='between(t\\,0.2\\,3.5)'",
       cameraFilters: "scale=w='ceil(400/2)*2':h='ceil(226/2)*2':eval=frame,crop=w=320:h=180:x='46':y='23'",
@@ -173,6 +194,59 @@ test('encodes the combined creator export graph into synchronized media', { time
       actual: media.duration,
       expected: plan.expectedDuration,
     });
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('normalizes MediaRecorder WebM timebases instead of exporting duplicate frames', { timeout: 45000 }, () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'screenforge-mediarecorder-rate-test-'));
+  const inputPath = path.join(tempDir, 'mediarecorder-like.webm');
+  const outputPath = path.join(tempDir, 'output.mp4');
+
+  try {
+    runFfmpeg([
+      '-y',
+      '-f', 'lavfi',
+      '-i', 'testsrc2=size=160x90:rate=30:duration=2',
+      '-vf', "settb=1/1000,setpts='N*33+mod(N*N*7,11)'",
+      '-fps_mode', 'vfr',
+      '-enc_time_base', '1/1000',
+      '-c:v', 'libvpx',
+      '-deadline', 'realtime',
+      '-cpu-used', '8',
+      '-an',
+      inputPath,
+    ], 'MediaRecorder-like fixture creation');
+    removeWebmDefaultDuration(inputPath);
+
+    const source = probeMedia(inputPath);
+    const sourceFrames = decodedVideoFrameCount(inputPath);
+    const sourceProbe = runFfmpeg(
+      ['-hide_banner', '-i', inputPath, '-f', 'null', '-'],
+      'MediaRecorder-like rate probe',
+    );
+    assert.match(sourceProbe.stderr, /\b1k tbr\b/);
+    assert.ok(sourceFrames >= 58 && sourceFrames <= 61, { sourceFrames });
+
+    const plan = buildExportPlan({
+      inputPath,
+      outputPath,
+      trimIn: 0,
+      trimOut: source.duration,
+      sourceFrameRate: 30,
+      speedMultiplier: 1,
+      hasAudio: false,
+      format: 'h264',
+      crf: 28,
+    });
+    runFfmpeg(plan.args, 'MediaRecorder-like export');
+
+    const output = probeMedia(outputPath);
+    const outputFrames = decodedVideoFrameCount(outputPath);
+    assert.equal(output.frameRate, 30);
+    assert.ok(Math.abs(output.duration - source.duration) <= 0.05, { source, output });
+    assert.ok(Math.abs(outputFrames - sourceFrames) <= 2, { sourceFrames, outputFrames });
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

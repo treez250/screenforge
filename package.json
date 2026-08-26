@@ -1,6 +1,6 @@
 {
   "name": "screenforge",
-  "version": "1.0.30",
+  "version": "1.0.31",
   "description": "Creator-grade screen recorder with intelligent zoom, click, and shortcut overlays",
   "author": "Side By Tech LLC",
   "main": "main.js",

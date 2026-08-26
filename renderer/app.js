@@ -950,13 +950,27 @@ function renderSources() {
   if (!S.selected && S.filtered.length) selectSource(0);
 }
 
+// True when the chosen source gives us no on-screen rectangle. macOS does not
+// report where another app's window sits, and Electron exposes no API for it, so
+// for window capture we cannot translate a global click position into a position
+// inside the recording. Everything position-based is therefore inert.
+function pointerTrackingUnavailable() {
+  return Boolean(S.selected) && !S.selected.isScreen && !S.sourceBounds;
+}
+
+const POINTER_TRACKING_WARNING =
+  'Recording a window: click zooms, click rings and cursor effects will not work. '
+  + 'Pick Display or Area for those. Keyboard shortcut overlays still work.';
+
 function selectSource(i) {
   S.selected = S.filtered[i];
   S.sourceBounds = S.selected?.bounds || null;
   if (!S.selected?.isScreen) S.cfg.captureArea = null;
   screenforgeApi.setSourceBounds(S.sourceBounds);
-  if (S.selected && !S.selected.isScreen && !S.sourceBounds) {
-    showFloatToast('Use Display or Area for pixel-accurate Action Director tracking');
+  if (pointerTrackingUnavailable()) {
+    // The old wording ("pixel-accurate Action Director tracking") never told the
+    // user that their clicks would be silently thrown away.
+    showFloatToast(POINTER_TRACKING_WARNING);
   }
   renderSources();
   drawBgPreview();
@@ -1586,6 +1600,15 @@ async function startRecording() {
 
     // Stop live source refresh while recording
     clearInterval(_sourceRefreshTimer);
+
+    // Warn again at the moment it actually matters. Selecting a source and
+    // hitting record can be minutes apart, and a toast from back then is long
+    // gone by the time the user is clicking through a take that silently records
+    // none of it.
+    if (pointerTrackingUnavailable() && (S.cfg.zoom || S.cfg.clickRings || S.cfg.cursor)) {
+      showFloatToast(POINTER_TRACKING_WARNING);
+    }
+
     // Hide main window and show floating pill bar
     screenforgeApi.startCursorPoll();
     screenforgeApi.recordingStarted({
@@ -2317,6 +2340,18 @@ async function finishRecording() {
 
   // Bring main window back before showing any UI
   screenforgeApi.recordingStopped();
+
+  // If click zooms were switched on but nothing was captured, say so now. This
+  // is the moment the user goes looking for the effect, and silence here is what
+  // makes it read as "the feature is broken" rather than "this source can't do
+  // it".
+  if (S.cfg.zoom && !S.recEvents.clicks.length) {
+    showFloatToast(
+      pointerTrackingUnavailable()
+        ? 'No click zooms: a window source cannot report click positions. Use Display or Area.'
+        : 'No click zooms were added because no clicks were detected inside the recording area.',
+    );
+  }
 
   const btn = $('recordBtn');
   btn.disabled = true; btn.textContent = 'Processing…';

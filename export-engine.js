@@ -147,12 +147,12 @@ function buildExportPlan(options = {}) {
     graph.push('[gifpalettein]palettegen[gifpalette]');
     graph.push('[gifframes][gifpalette]paletteuse[vout]');
   } else if (!approximatelyEqual(speed, 1)) {
-    const frameClock = cutClock.selection ? ',fps=source_fps' : '';
-    graph.push(`[${videoLabel}]settb=AVTB,setpts=PTS/${numberToken(speed)}${frameClock}[vout]`);
-  } else if (cutClock.selection) {
-    graph.push(`[${videoLabel}]fps=source_fps[vout]`);
+    graph.push(
+      `[${videoLabel}]settb=AVTB,setpts=PTS/${numberToken(speed)},`
+      + `fps=${numberToken(sourceFrameRate)}[vout]`,
+    );
   } else {
-    graph.push(`[${videoLabel}]null[vout]`);
+    graph.push(`[${videoLabel}]fps=${numberToken(sourceFrameRate)}[vout]`);
   }
 
   if (hasOutputAudio) {
