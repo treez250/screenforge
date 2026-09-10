@@ -117,3 +117,9 @@ Electron 43 · FFmpeg (bundled via `ffmpeg-static`) · `uiohook-napi` for global
 ## Status
 
 Actively developed. Current focus is motion blur on fast camera moves and per-segment speed ramping.
+
+## License
+
+ScreenForge is proprietary software, (c) 2026 Side By Tech LLC. The source is
+published here for evaluation and reference only - you may read it, but not
+copy, modify, or redistribute it. See [LICENSE](LICENSE) for the full terms.

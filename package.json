@@ -3,6 +3,16 @@
   "version": "1.0.31",
   "description": "Creator-grade screen recorder with intelligent zoom, click, and shortcut overlays",
   "author": "Side By Tech LLC",
+  "license": "SEE LICENSE IN LICENSE",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/treez250/screenforge.git"
+  },
+  "homepage": "https://github.com/treez250/screenforge#readme",
+  "bugs": {
+    "url": "https://github.com/treez250/screenforge/issues"
+  },
   "main": "main.js",
   "scripts": {
     "build:css": "tailwindcss -c tailwind.config.js -i renderer/tailwind-input.css -o renderer/tailwind.css --minify",
